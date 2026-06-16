@@ -73,7 +73,7 @@ Write-Host "Installing Python deps…"
 # ---- pull model ------------------------------------------------------------
 if (-not $NoModel) {
   $env:OLLAMA_MODELS = "$RT\ollama\models"
-  $env:OLLAMA_HOST = "127.0.0.1:11434"
+  $env:OLLAMA_HOST = "127.0.0.1:11500"
   $ob = "$ollDest\ollama.exe"
   if (Test-Path $ob) {
     Write-Host "Pulling $LocalModel …"

@@ -27,3 +27,10 @@ def test_write_env_roundtrip(tmp_path):
     config.write_env(cfg, {"ANTHROPIC_API_KEY": "sk-abc"})
     again = config.load(root=tmp_path)
     assert again.anthropic_api_key == "sk-abc"
+
+
+def test_ollama_host_gets_scheme(tmp_path, monkeypatch):
+    # launcher sets OLLAMA_HOST as bare host:port; config must add a scheme
+    monkeypatch.setenv("OLLAMA_HOST", "127.0.0.1:11500")
+    cfg = config.load(root=tmp_path)
+    assert cfg.ollama_host == "http://127.0.0.1:11500"

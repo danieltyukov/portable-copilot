@@ -24,7 +24,7 @@ export XDG_DATA_HOME="$ROOT/data/share"
 export XDG_CACHE_HOME="$ROOT/data/cache"
 export OLLAMA_HOME="$RT/ollama"
 export OLLAMA_MODELS="$RT/ollama/models"
-export OLLAMA_HOST="${OLLAMA_HOST:-127.0.0.1:11434}"
+export OLLAMA_HOST="${OLLAMA_HOST:-127.0.0.1:11500}"
 mkdir -p "$HOME" "$XDG_CONFIG_HOME" "$XDG_DATA_HOME" "$XDG_CACHE_HOME" \
          "$ROOT/data/sessions" "$ROOT/context" "$OLLAMA_MODELS" 2>/dev/null || true
 
@@ -79,6 +79,16 @@ if [ -n "$OLLAMA_BIN" ]; then
   fi
 else
   echo "Sparky: no Ollama found — offline mode unavailable until you run setup."
+fi
+
+# Wait briefly for Ollama to accept connections so offline mode is ready
+# (and the model is warm) by the time you need it. Breaks as soon as it's up.
+if [ -n "$OLLAMA_PID" ]; then
+  ohost="${OLLAMA_HOST%%:*}"; oport="${OLLAMA_HOST##*:}"
+  for _ in $(seq 1 40); do
+    (exec 3<>"/dev/tcp/$ohost/$oport") 2>/dev/null && { exec 3>&- 3<&-; break; }
+    sleep 0.25
+  done
 fi
 
 # ---- launch the TUI (direct if executable, else via the dynamic loader) ----

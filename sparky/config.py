@@ -16,7 +16,9 @@ from pathlib import Path
 DEFAULT_MODEL = "claude-sonnet-4-6"
 OPUS_MODEL = "claude-opus-4-8"
 DEFAULT_LOCAL_MODEL = "qwen2.5-coder:3b"
-DEFAULT_OLLAMA_HOST = "http://127.0.0.1:11434"
+# A non-default port so the bundled Ollama never collides with a system Ollama
+# that may already own 11434 on the host machine.
+DEFAULT_OLLAMA_HOST = "http://127.0.0.1:11500"
 
 
 def _parse_env_file(path: Path) -> dict[str, str]:
@@ -70,6 +72,11 @@ def load(root: Path | None = None) -> Config:
 
     key = pick("ANTHROPIC_API_KEY")
     yolo_raw = pick("SPARKY_YOLO", "0") or "0"
+    # OLLAMA_HOST is set by the launcher in ollama's own "host:port" form (no
+    # scheme); our stdlib HTTP client needs a full URL, so normalize it.
+    ollama_host = pick("OLLAMA_HOST", DEFAULT_OLLAMA_HOST) or DEFAULT_OLLAMA_HOST
+    if not ollama_host.startswith(("http://", "https://")):
+        ollama_host = "http://" + ollama_host
     return Config(
         root=root,
         data_dir=data_dir,
@@ -82,7 +89,7 @@ def load(root: Path | None = None) -> Config:
         opus_model=pick("SPARKY_OPUS_MODEL", OPUS_MODEL) or OPUS_MODEL,
         local_model=pick("SPARKY_LOCAL_MODEL", DEFAULT_LOCAL_MODEL) or DEFAULT_LOCAL_MODEL,
         yolo=yolo_raw.lower() in ("1", "true", "yes", "on"),
-        ollama_host=pick("OLLAMA_HOST", DEFAULT_OLLAMA_HOST) or DEFAULT_OLLAMA_HOST,
+        ollama_host=ollama_host,
         env=file_env,
     )
 

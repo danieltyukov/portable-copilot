@@ -78,7 +78,7 @@ bash "$MOUNT/tools/fetch_runtime.sh" "$MOUNT" "$CROSS"
 if [ "$PULL_MODEL" = 1 ]; then
   echo "Pulling local model $LOCAL_MODEL into the stick …"
   export OLLAMA_MODELS="$MOUNT/runtime/ollama/models"
-  export OLLAMA_HOST="127.0.0.1:11434"
+  export OLLAMA_HOST="127.0.0.1:11500"
   OS=linux; case "$(uname -s)" in Darwin) OS=macos ;; esac
   ARCH=x86_64; case "$(uname -m)" in aarch64|arm64) ARCH=aarch64 ;; esac
   # Prefer the host's executable ollama for the pull (the bundled copy on a FAT
@@ -94,7 +94,7 @@ if [ "$PULL_MODEL" = 1 ]; then
     export LD_LIBRARY_PATH="$(dirname "$OB")/../lib/ollama:${LD_LIBRARY_PATH:-}"
     "$OB" serve >/tmp/sparky-setup-ollama.log 2>&1 &
     SPID=$!
-    for _ in $(seq 1 30); do curl -sf "http://127.0.0.1:11434/api/tags" >/dev/null 2>&1 && break; sleep 1; done
+    for _ in $(seq 1 30); do curl -sf "http://127.0.0.1:11500/api/tags" >/dev/null 2>&1 && break; sleep 1; done
     "$OB" pull "$LOCAL_MODEL"
     kill "$SPID" 2>/dev/null || true
     echo "Model pulled into $OLLAMA_MODELS"

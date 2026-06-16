@@ -110,15 +110,13 @@ class LocalProvider:
             raise ProviderError(f"Ollama HTTP {e.code}: {detail}") from e
         except (urllib.error.URLError, OSError, TimeoutError) as e:
             raise ProviderError(f"Ollama connection error: {e}") from e
-        return self._parse(body)
+        tool_names = [t["name"] for t in tools] if tools else []
+        return self._parse(body, tool_names)
 
     @staticmethod
-    def _parse(body: dict) -> Reply:
+    def _parse(body: dict, tool_names=()) -> Reply:
         msg = body.get("message", {}) or {}
         text = msg.get("content", "") or ""
-        norm_blocks: list[dict] = []
-        if text:
-            norm_blocks.append({"type": "text", "text": text})
         tool_calls: list[ToolCall] = []
         for i, call in enumerate(msg.get("tool_calls", []) or []):
             fn = call.get("function", {}) or {}
@@ -130,6 +128,17 @@ class LocalProvider:
                     args = {}
             tc = ToolCall(id=f"call_{i}", name=fn.get("name", ""), input=args or {})
             tool_calls.append(tc)
+
+        # Fallback: small models (e.g. qwen2.5-coder:3b) often emit the tool call
+        # as a JSON blob in the text instead of structured tool_calls. Recover it.
+        if not tool_calls and tool_names:
+            extracted, text = extract_text_tool_calls(text, tool_names)
+            tool_calls = extracted
+
+        norm_blocks: list[dict] = []
+        if text:
+            norm_blocks.append({"type": "text", "text": text})
+        for tc in tool_calls:
             norm_blocks.append({"type": "tool_use", "id": tc.id, "name": tc.name, "input": tc.input})
         if not norm_blocks:
             norm_blocks.append({"type": "text", "text": ""})
@@ -153,3 +162,52 @@ class LocalProvider:
                 return
         except OSError:
             return
+
+
+def extract_text_tool_calls(text: str, tool_names) -> tuple[list[ToolCall], str]:
+    """Recover tool calls a small model emitted as JSON in its text.
+
+    Handles ```json {...}``` fences, <tool_call>{...}</tool_call> tags, and bare
+    objects like {"name": "list_dir", "arguments": {...}}. Returns the recovered
+    calls and the text with those JSON blobs removed.
+    """
+    names = set(tool_names)
+    if not text or not names:
+        return [], text
+    decoder = json.JSONDecoder()
+    calls: list[ToolCall] = []
+    spans: list[tuple[int, int]] = []
+    i = 0
+    n = len(text)
+    while i < n:
+        j = text.find("{", i)
+        if j == -1:
+            break
+        try:
+            obj, end = decoder.raw_decode(text, j)
+        except json.JSONDecodeError:
+            i = j + 1
+            continue
+        if isinstance(obj, dict) and obj.get("name") in names:
+            args = obj.get("arguments")
+            if args is None:
+                args = obj.get("parameters")
+            if args is None:
+                args = {k: v for k, v in obj.items() if k != "name"}
+            if isinstance(args, str):
+                try:
+                    args = json.loads(args)
+                except json.JSONDecodeError:
+                    args = {}
+            calls.append(ToolCall(id=f"call_{len(calls)}", name=obj["name"], input=args or {}))
+            spans.append((j, end))
+        i = end
+    if not calls:
+        return [], text
+    # strip the matched JSON (and surrounding ``` / <tool_call> wrappers) from text
+    cleaned = text
+    for start, end in reversed(spans):
+        cleaned = cleaned[:start] + cleaned[end:]
+    cleaned = cleaned.replace("```json", "").replace("```", "")
+    cleaned = cleaned.replace("<tool_call>", "").replace("</tool_call>", "")
+    return calls, cleaned.strip()

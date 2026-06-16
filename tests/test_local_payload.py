@@ -54,3 +54,27 @@ def test_parse_tool_calls(tmp_path):
     assert reply.wants_tools
     assert reply.tool_calls[0].name == "list_dir"
     assert reply.tool_calls[0].id == "call_0"
+
+
+def test_text_tool_call_fallback():
+    from sparky.providers.local import extract_text_tool_calls
+    text = 'Let me list them.\n```json\n{"name": "list_dir", "arguments": {"path": "."}}\n```'
+    calls, cleaned = extract_text_tool_calls(text, ["list_dir", "read_file"])
+    assert len(calls) == 1
+    assert calls[0].name == "list_dir"
+    assert calls[0].input == {"path": "."}
+    assert "list_dir" not in cleaned  # JSON blob stripped
+
+
+def test_text_tool_call_fallback_none_when_unknown():
+    from sparky.providers.local import extract_text_tool_calls
+    calls, cleaned = extract_text_tool_calls('{"name": "unknown_tool", "arguments": {}}', ["list_dir"])
+    assert calls == []
+
+
+def test_parse_uses_text_fallback():
+    body = {"message": {"role": "assistant",
+                        "content": '{"name": "read_file", "arguments": {"path": "x.py"}}'}}
+    reply = LocalProvider._parse(body, ["read_file"])
+    assert reply.wants_tools
+    assert reply.tool_calls[0].name == "read_file"

@@ -15,7 +15,7 @@ set "APPDATA=%ROOT%\data\appdata"
 set "LOCALAPPDATA=%ROOT%\data\localappdata"
 set "OLLAMA_HOME=%RT%\ollama"
 set "OLLAMA_MODELS=%RT%\ollama\models"
-set "OLLAMA_HOST=127.0.0.1:11434"
+set "OLLAMA_HOST=127.0.0.1:11500"
 for %%D in ("%HOME%" "%APPDATA%" "%LOCALAPPDATA%" "%ROOT%\data\sessions" "%ROOT%\context" "%OLLAMA_MODELS%") do (
   if not exist "%%~D" mkdir "%%~D" >nul 2>&1
 )
