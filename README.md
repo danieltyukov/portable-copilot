@@ -56,8 +56,12 @@ background, and launches the copilot. Nothing is installed on the host machine.
 
 ## Set up a stick
 
-Plug in a USB drive and name its volume **`Sparky`** (rename it in your file manager,
-or `sudo fatlabel /dev/sdXN SPARKY` on Linux / `label E: SPARKY` on Windows). Then:
+Plug in a USB drive and name its volume **`Sparky`**. **Format it as exFAT**
+(recommended): exFAT is cross-platform, supports files >4GB, and — unlike FAT32 —
+mounts executable on Linux, which the bundled local model needs for **offline** mode.
+Online (Claude) works on FAT32 too; if your stick is FAT32 and you want offline on
+Linux, run `sudo tools/format_exfat.sh` once to convert it (it backs up, reformats,
+and restores). Then:
 
 ```bash
 # macOS / Linux — wipes the stick, installs Sparky, fetches the runtime + model

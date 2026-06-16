@@ -60,8 +60,8 @@ def find_root() -> Path:
     return Path(__file__).resolve().parent.parent
 
 
-def load(root: Path | None = None) -> Config:
-    root = (root or find_root()).resolve()
+def load(root: Path | str | None = None) -> Config:
+    root = (Path(root) if root else find_root()).resolve()
     data_dir = root / "data"
     env_file = data_dir / "sparky.env"
     file_env = _parse_env_file(env_file)

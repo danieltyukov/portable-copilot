@@ -35,6 +35,14 @@ if [ -z "$MOUNT" ]; then
 fi
 [ -d "$MOUNT" ] || { echo "Mountpoint $MOUNT does not exist."; exit 1; }
 
+# Warn if the stick is FAT — online works, but offline needs an exec-capable fs.
+FSTYPE_CHK="$(findmnt -no FSTYPE "$MOUNT" 2>/dev/null || true)"
+case "$FSTYPE_CHK" in
+  vfat|msdos)
+    echo "NOTE: $MOUNT is $FSTYPE_CHK (FAT). Online (Claude) will work, but OFFLINE mode"
+    echo "      needs exFAT on Linux. Convert later with: sudo tools/format_exfat.sh" ;;
+esac
+
 echo "Installing Sparky:"
 echo "  source : $SRC"
 echo "  target : $MOUNT   (label should be 'Sparky')"
