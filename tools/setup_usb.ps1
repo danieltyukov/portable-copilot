@@ -37,7 +37,7 @@ Get-ChildItem -Force -LiteralPath $Root | Remove-Item -Recurse -Force -ErrorActi
 foreach ($item in @("sparky","tools","docs")) {
   if (Test-Path "$Src\$item") { Copy-Item "$Src\$item" "$Root\$item" -Recurse -Force }
 }
-foreach ($f in @("start.sh","start.command","START.bat","README.md")) {
+foreach ($f in @("sparky.cmd","start.sh","start.command","START.bat","README.md")) {
   if (Test-Path "$Src\$f") { Copy-Item "$Src\$f" "$Root\$f" -Force }
 }
 New-Item -ItemType Directory -Force -Path "$Root\context","$Root\data\sessions" | Out-Null

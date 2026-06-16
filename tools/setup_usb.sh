@@ -60,8 +60,8 @@ echo "Copying Sparky app …"
 cp -a "$SRC/sparky" "$MOUNT/"
 cp -a "$SRC/tools" "$MOUNT/"
 cp -a "$SRC/docs" "$MOUNT/" 2>/dev/null || true
-cp -a "$SRC/start.sh" "$SRC/start.command" "$SRC/START.bat" "$SRC/README.md" "$MOUNT/" 2>/dev/null || true
-chmod +x "$MOUNT/start.sh" "$MOUNT/start.command" "$MOUNT"/tools/*.sh 2>/dev/null || true
+cp -a "$SRC/sparky.cmd" "$SRC/start.sh" "$SRC/start.command" "$SRC/START.bat" "$SRC/README.md" "$MOUNT/" 2>/dev/null || true
+chmod +x "$MOUNT/sparky.cmd" "$MOUNT/start.sh" "$MOUNT/start.command" "$MOUNT"/tools/*.sh 2>/dev/null || true
 
 mkdir -p "$MOUNT/context" "$MOUNT/data/sessions"
 cat > "$MOUNT/context/README.txt" <<'EOF'
