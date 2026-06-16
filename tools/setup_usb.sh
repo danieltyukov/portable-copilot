@@ -81,11 +81,15 @@ if [ "$PULL_MODEL" = 1 ]; then
   export OLLAMA_HOST="127.0.0.1:11434"
   OS=linux; case "$(uname -s)" in Darwin) OS=macos ;; esac
   ARCH=x86_64; case "$(uname -m)" in aarch64|arm64) ARCH=aarch64 ;; esac
+  # Prefer the host's executable ollama for the pull (the bundled copy on a FAT
+  # stick has no exec bit). Falls back to the bundled binary if no host ollama.
   OB=""
-  for c in "$MOUNT/runtime/ollama/pkg/$OS-$ARCH/bin/ollama" "$MOUNT/runtime/ollama/pkg/$OS-$ARCH/ollama"; do
-    [ -x "$c" ] && OB="$c" && break
-  done
-  command -v ollama >/dev/null 2>&1 && [ -z "$OB" ] && OB="$(command -v ollama)"
+  command -v ollama >/dev/null 2>&1 && OB="$(command -v ollama)"
+  if [ -z "$OB" ]; then
+    for c in "$MOUNT/runtime/ollama/pkg/$OS-$ARCH/bin/ollama" "$MOUNT/runtime/ollama/pkg/$OS-$ARCH/ollama"; do
+      [ -e "$c" ] && OB="$c" && break
+    done
+  fi
   if [ -n "$OB" ]; then
     export LD_LIBRARY_PATH="$(dirname "$OB")/../lib/ollama:${LD_LIBRARY_PATH:-}"
     "$OB" serve >/tmp/sparky-setup-ollama.log 2>&1 &

@@ -8,7 +8,7 @@
 :; # labels) and runs the batch section.
 :; # =====================================================================
 :; DIR="$(cd "$(dirname "$0")" && pwd)"
-:; exec "$DIR/start.sh" "$@"
+:; exec bash "$DIR/start.sh" "$@"
 
 @echo off
 call "%~dp0START.bat" %*
