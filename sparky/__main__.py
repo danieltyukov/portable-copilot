@@ -45,6 +45,16 @@ def self_test(cfg) -> int:
             line(f"local model {cfg.local_model} pulled", has_model, ", ".join(names) or "none")
         except Exception as e:
             line("list local models", False, str(e))
+    # Offline inference spawns a native binary; FAT mounts (showexec) make it
+    # non-executable. Flag that so "ollama reachable" isn't mistaken for offline-ready.
+    import glob
+    import os as _os
+    runners = glob.glob(str(cfg.runtime_dir / "ollama" / "pkg" / "*" / "lib" / "ollama" / "llama-server"))
+    runners += glob.glob(str(cfg.runtime_dir / "ollama" / "pkg" / "*" / "lib" / "ollama" / "llama-server.exe"))
+    if runners and not any(_os.access(r, _os.X_OK) for r in runners):
+        print("  ! offline inference: the local runtime isn't executable here "
+              "(FAT stick). Run `sudo tools/format_exfat.sh` to enable offline on Linux.")
+
     print("\nReady." if ok else "\nSome checks failed (see above).")
     return 0 if ok else 1
 
