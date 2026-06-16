@@ -82,6 +82,30 @@ fetch_ollama() {  # os arch
   if [ -e "$dest/bin/ollama" ] || [ -e "$dest/ollama" ] || [ -e "$dest/ollama.exe" ]; then
     log "ollama $os-$arch already present"; return 0
   fi
+  # Fast path: for the current host, copy the installed ollama (binary + libs)
+  # instead of a ~1GB download. Produces the same self-contained bin/+lib/ layout.
+  if [ "$os-$arch" = "$(detect_os)-$(detect_arch)" ] && command -v ollama >/dev/null 2>&1; then
+    local hbin; hbin="$(command -v ollama)"
+    local hlib=""
+    for d in /usr/local/lib/ollama /usr/lib/ollama "$(dirname "$hbin")/../lib/ollama"; do
+      [ -d "$d" ] && hlib="$d" && break
+    done
+    if [ -n "$hlib" ]; then
+      log "copying host ollama ($hbin + $hlib) for $os-$arch …"
+      mkdir -p "$dest/bin" "$dest/lib/ollama"
+      cp -a "$hbin" "$dest/bin/ollama"
+      # Top-level files only = CPU inference libs; skip cuda_v*/vulkan/rocm
+      # GPU runner subdirs (~2GB, useless on a portable CPU-only stick).
+      # Set SPARKY_INCLUDE_GPU=1 to bundle them too.
+      if [ "${SPARKY_INCLUDE_GPU:-0}" = "1" ]; then
+        cp -a "$hlib"/. "$dest/lib/ollama/"
+      else
+        find "$hlib" -maxdepth 1 -type f -exec cp -a {} "$dest/lib/ollama/" \;
+      fi
+      log "ollama $os-$arch ready (from host, CPU libs)"
+      return 0
+    fi
+  fi
   local url="https://github.com/ollama/ollama/releases/download/${OLLAMA_TAG}/${asset}"
   log "downloading ollama $os-$arch …"
   mkdir -p "$dest"
