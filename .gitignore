@@ -1,0 +1,6 @@
+# Portable runtime + per-drive state — never committed (weights, keys, sessions)
+runtime/
+data/
+*.pyc
+__pycache__/
+.DS_Store
