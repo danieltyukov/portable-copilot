@@ -56,28 +56,70 @@ def grab_image() -> tuple[bytes, str] | None:
             data = _run(["pngpaste", "-"])
             if data:
                 return data, "image/png"
-        # osascript fallback: write clipboard PNG to a temp file
-        tmp = os.path.join(tempfile.gettempdir(), "sparky_clip.png")
+        tmp = _fresh_tmp()
         script = (
             'try\nset f to (open for access POSIX file "%s" with write permission)\n'
             "write (the clipboard as «class PNGf») to f\nclose access f\nend try" % tmp
         )
         _run_text(["osascript", "-e", script])
-        if os.path.exists(tmp) and os.path.getsize(tmp) > 8:
-            with open(tmp, "rb") as fh:
-                return fh.read(), "image/png"
+        return _read_tmp(tmp, "image/png")
     # ----- Windows -----
     if os.name == "nt":
-        tmp = os.path.join(tempfile.gettempdir(), "sparky_clip.png")
-        ps = (
-            "Add-Type -AssemblyName System.Windows.Forms;"
-            "$i=[Windows.Forms.Clipboard]::GetImage();"
-            "if($i){$i.Save('%s',[System.Drawing.Imaging.ImageFormat]::Png)}" % tmp.replace("\\", "\\\\")
-        )
-        _run_text(["powershell", "-NoProfile", "-Command", ps])
-        if os.path.exists(tmp) and os.path.getsize(tmp) > 8:
-            with open(tmp, "rb") as fh:
-                return fh.read(), "image/png"
+        return _grab_windows()
+    return None
+
+
+def _fresh_tmp() -> str:
+    fd, tmp = tempfile.mkstemp(suffix=".png", prefix="sparky_clip_")
+    os.close(fd)
+    try:
+        os.remove(tmp)  # PS/osascript recreates it only if there really is an image
+    except OSError:
+        pass
+    return tmp
+
+
+def _read_tmp(path: str, media: str) -> tuple[bytes, str] | None:
+    if os.path.exists(path) and os.path.getsize(path) > 8:
+        with open(path, "rb") as fh:
+            data = fh.read()
+        try:
+            os.remove(path)
+        except OSError:
+            pass
+        return data, media
+    return None
+
+
+def _grab_windows() -> tuple[bytes, str] | None:
+    tmp = _fresh_tmp()
+    esc = tmp.replace("\\", "\\\\")
+    # 1) a copied bitmap/screenshot -> save as PNG
+    ps_img = (
+        "$ErrorActionPreference='SilentlyContinue';"
+        "Add-Type -AssemblyName System.Windows.Forms,System.Drawing;"
+        "$i=[System.Windows.Forms.Clipboard]::GetImage();"
+        f"if($i){{$i.Save('{esc}',[System.Drawing.Imaging.ImageFormat]::Png)}}"
+    )
+    _run_text(["powershell", "-NoProfile", "-Sta", "-Command", ps_img])
+    got = _read_tmp(tmp, "image/png")
+    if got:
+        return got
+    # 2) a copied image FILE in Explorer -> return its bytes with the right type
+    ps_path = (
+        "$ErrorActionPreference='SilentlyContinue';"
+        "Add-Type -AssemblyName System.Windows.Forms;"
+        "$f=[System.Windows.Forms.Clipboard]::GetFileDropList();"
+        "if($f -and $f.Count -ge 1){[Console]::Out.Write($f[0])}"
+    )
+    p = _run_text(["powershell", "-NoProfile", "-Sta", "-Command", ps_path]).strip()
+    if p and os.path.isfile(p):
+        ext = os.path.splitext(p)[1].lower()
+        media = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+                 ".gif": "image/gif", ".webp": "image/webp", ".bmp": "image/png"}.get(ext)
+        if media:
+            with open(p, "rb") as fh:
+                return fh.read(), media
     return None
 
 

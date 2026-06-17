@@ -49,7 +49,9 @@ Commands:
   /help              show this help
   /model [name]      switch online model: 'sonnet', 'opus', or a full id (or Ctrl-T)
   /img <path> ...    attach an image file to the next message (also auto-detected)
-  /paste             paste an image from the clipboard (or press Ctrl-V)
+  /paste  (or /v)    paste an image from the clipboard.
+                     Linux/macOS: Ctrl-V also works. Windows: type /paste
+                     (Windows Terminal grabs Ctrl-V for its own paste).
   /context           show what's loaded from the drive's context/ folder
   /resume            resume your most recent conversation
   /sessions          list saved conversations
@@ -156,7 +158,7 @@ class UI:
             grid.add_column(); grid.add_column()
             grid.add_row(Text(MASCOT, style=f"bold {C['brand']}"), info)
             self.console.print(grid)
-            self.console.print(f"[{C['muted']}]/help · Ctrl-T cycle model · Ctrl-V paste image · /resume[/]\n")
+            self.console.print(f"[{C['muted']}]/help · Ctrl-T cycle model · /paste image (or Ctrl-V) · /resume[/]\n")
         else:
             print(MASCOT)
             print(f"Sparky v{__version__} — {self._model_label()} — "
@@ -296,16 +298,16 @@ class UI:
                 self.router.set_online_model(model)
                 self.model_idx = next((i for i, (_, m) in enumerate(ONLINE_MODELS) if m == model), self.model_idx)
                 self._print(f"online model → {model}")
-        elif cmd == "/paste":
+        elif cmd in ("/paste", "/v"):
             grabbed = clip_mod.grab_image()
             if grabbed:
                 data, mt = grabbed
                 self.pending_images.append(images_mod.encode_image_bytes(data, mt))
-                self._print(f"pasted clipboard image ({len(data)//1024} KB) — attached to your next message")
+                self._print(f"📎 pasted clipboard image ({len(data)//1024} KB, {mt}) — attached to your next message")
             elif not clip_mod.available():
                 self._print("no clipboard image tool found (install xclip / wl-clipboard on Linux)")
             else:
-                self._print("no image in the clipboard")
+                self._print("no image in the clipboard — copy a screenshot (or an image file), then /paste")
         elif cmd == "/resume":
             self._do_resume()
         elif cmd == "/sessions":
