@@ -31,26 +31,32 @@ def load_context(context_dir: Path) -> str:
     if not files:
         return ""
 
+    base = context_dir.resolve()
     tree_lines = [str(p.relative_to(context_dir)) for p in files]
     shown = tree_lines[:MAX_LISTED]
     if len(tree_lines) > MAX_LISTED:
         shown.append(f"… (+{len(tree_lines) - MAX_LISTED} more files)")
-    parts = ["The user has dropped these files into the drive's context/ folder:",
-             "\n".join(f"  - {t}" for t in shown), ""]
+    parts = [
+        f"The user has dropped reference files into this drive's context folder ({base}).",
+        "Their text is included below (up to a budget). For ANY file here — including "
+        "ones not shown inline below or marked (not loaded) — you can open the full "
+        f"content yourself with the read_file or search tools using its absolute path "
+        f"under {base}.",
+        "Files:",
+        "\n".join(f"  - {t}" for t in shown), "",
+    ]
 
     total = sum(len(s) for s in parts)
     for p in files:
-        if total >= MAX_TOTAL:
-            parts.append("…[context budget reached; remaining files listed above only]")
-            break
         rel = p.relative_to(context_dir)
         if not _is_texty(p):
-            parts.append(f"### {rel} (binary — skipped)")
+            continue  # binaries (pdf/png) are listed above; not inlined
+        if total >= MAX_TOTAL:
+            parts.append(f"### {rel} (not loaded — over budget; read it with read_file at {base / rel})")
             continue
         try:
             body = p.read_text(encoding="utf-8", errors="strict")[:MAX_PER_FILE]
         except (UnicodeDecodeError, OSError):
-            parts.append(f"### {rel} (unreadable — skipped)")
             continue
         chunk = f"### {rel}\n{body}"
         parts.append(chunk)
