@@ -44,7 +44,9 @@ def test_image_block_dropped_with_note(tmp_path):
     img = {"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": "AAA"}}
     msgs = [{"role": "user", "content": [img, text_block("what")]}]
     payload = p.build_payload(msgs, None, None)
-    assert "image omitted" in payload["messages"][0]["content"]
+    # images are passed via Ollama's `images` field (used by vision models)
+    assert payload["messages"][0]["images"] == ["AAA"]
+    assert payload["messages"][0]["content"] == "what"
 
 
 def test_parse_tool_calls(tmp_path):

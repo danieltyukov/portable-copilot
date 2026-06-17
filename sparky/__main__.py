@@ -93,7 +93,7 @@ def main(argv=None) -> int:
         return self_test(cfg)
     cfg = first_run_setup(cfg)
     from .ui import run
-    run(cfg)
+    run(cfg, resume=("--resume" in argv))
     return 0
 
 

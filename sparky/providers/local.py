@@ -61,12 +61,17 @@ class LocalProvider:
         out: list[dict] = []
         texts: list[str] = []
         tool_calls: list[dict] = []
+        images: list[str] = []
         for block in content:
             btype = block.get("type")
             if btype == "text":
                 texts.append(block.get("text", ""))
             elif btype == "image":
-                texts.append("[image omitted — local model is text-only; reconnect for vision]")
+                # Pass to Ollama's `images` field — used if the local model has
+                # vision (e.g. a qwen-vl); text-only models ignore it.
+                src = block.get("source", {}) or {}
+                if src.get("data"):
+                    images.append(src["data"])
             elif btype == "tool_use":
                 tool_calls.append({
                     "function": {"name": block.get("name", ""), "arguments": block.get("input", {})}
@@ -82,8 +87,11 @@ class LocalProvider:
             if tool_calls:
                 am["tool_calls"] = tool_calls
             out.insert(0, am)
-        elif texts:
-            out.insert(0, {"role": role, "content": "".join(texts)})
+        elif texts or images:
+            m: dict = {"role": role, "content": "".join(texts)}
+            if images:
+                m["images"] = images
+            out.insert(0, m)
         return out
 
     # ---- network --------------------------------------------------------

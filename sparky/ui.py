@@ -8,8 +8,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from . import clipboard as clip_mod
 from . import config as config_mod
 from . import images as images_mod
+from . import sessions as sessions_mod
 from .agent import Agent
 from .connectivity import Monitor
 from .router import Router
@@ -27,6 +29,7 @@ except Exception:  # pragma: no cover - exercised only without the dep
 try:
     from prompt_toolkit import PromptSession
     from prompt_toolkit.history import FileHistory
+    from prompt_toolkit.key_binding import KeyBindings
     _PTK = True
 except Exception:  # pragma: no cover
     _PTK = False
@@ -36,8 +39,11 @@ HELP = """\
 Commands:
   /help              show this help
   /model [name]      switch online model: 'sonnet', 'opus', or a full id
-  /img <path> ...    attach an image to the next message (also auto-detected in prompts)
+  /img <path> ...    attach an image file to the next message (also auto-detected)
+  /paste             paste an image from the clipboard (or press Ctrl-V)
   /context           show what's loaded from the drive's context/ folder
+  /resume            resume your most recent conversation
+  /sessions          list saved conversations
   /clear             clear the conversation history
   /yolo              toggle auto-approval of shell commands
   /quit              exit
@@ -52,10 +58,32 @@ class UI:
         self.router = Router(cfg, monitor=self.monitor)
         self.agent = Agent(cfg, self.router, cwd=Path.cwd())
         self.pending_images: list[dict] = []
+        self.session_id = sessions_mod.new_id()
         self._session = None
         if _PTK:
             cfg.data_dir.mkdir(parents=True, exist_ok=True)
-            self._session = PromptSession(history=FileHistory(str(cfg.data_dir / "history")))
+            self._session = PromptSession(
+                history=FileHistory(str(cfg.data_dir / "history")),
+                key_bindings=self._key_bindings(),
+            )
+
+    def _key_bindings(self):
+        kb = KeyBindings()
+
+        @kb.add("c-v")  # Ctrl-V: paste a clipboard image if present, else text
+        def _(event):
+            grabbed = clip_mod.grab_image()
+            if grabbed:
+                data, mt = grabbed
+                self.pending_images.append(images_mod.encode_image_bytes(data, mt))
+                event.app.current_buffer.insert_text(f"[pasted image #{len(self.pending_images)}] ")
+            else:
+                try:
+                    event.app.current_buffer.paste_clipboard_data(event.app.clipboard.get_data())
+                except Exception:
+                    pass
+
+        return kb
 
     # ---- rendering helpers ---------------------------------------------
     def _print(self, *a, **k):
@@ -127,8 +155,21 @@ class UI:
             return self._session.prompt(prompt)
         return input(prompt)
 
-    def run(self):
+    def _do_resume(self):
+        d = sessions_mod.latest(self.cfg)
+        if not d:
+            self._print("no saved conversation to resume")
+            return
+        self.agent.history = d.get("history", [])
+        self.session_id = d.get("id", self.session_id)
+        self._print(f"resumed: {d.get('title', '(untitled)')} "
+                    f"[{C['muted']}]({len(self.agent.history)} messages)[/]"
+                    if self.console else f"resumed: {d.get('title','(untitled)')} ({len(self.agent.history)} messages)")
+
+    def run(self, resume: bool = False):
         self.banner()
+        if resume:
+            self._do_resume()
         while True:
             try:
                 line = self.read()
@@ -153,6 +194,7 @@ class UI:
                         pass
             try:
                 self.agent.run_turn(line, images=images, on_event=self.on_event)
+                sessions_mod.save(self.cfg, self.session_id, self.agent.history)
             except Exception as e:
                 self._print(f"[{C['red']}]error: {e}[/]" if self.console else f"error: {e}")
 
@@ -184,6 +226,25 @@ class UI:
                     for p in ip:
                         self.pending_images.append(images_mod.encode_image(p))
                     self._print(f"attached {len(ip)} image(s) to your next message")
+        elif cmd == "/paste":
+            grabbed = clip_mod.grab_image()
+            if grabbed:
+                data, mt = grabbed
+                self.pending_images.append(images_mod.encode_image_bytes(data, mt))
+                self._print(f"pasted clipboard image ({len(data)//1024} KB) — attached to your next message")
+            elif not clip_mod.available():
+                self._print("no clipboard image tool found (install xclip / wl-clipboard on Linux)")
+            else:
+                self._print("no image in the clipboard")
+        elif cmd == "/resume":
+            self._do_resume()
+        elif cmd == "/sessions":
+            items = sessions_mod.list_sessions(self.cfg)[:10]
+            if not items:
+                self._print("no saved conversations yet")
+            else:
+                for d in items:
+                    self._print(f"  {d.get('id','?')}  {d.get('title','(untitled)')}")
         elif cmd == "/context":
             from .context import load_context
             ctx = load_context(self.cfg.context_dir)
@@ -205,5 +266,5 @@ def _short(value, limit: int = 100) -> str:
     return s if len(s) <= limit else s[:limit] + "…"
 
 
-def run(cfg):
-    UI(cfg).run()
+def run(cfg, resume: bool = False):
+    UI(cfg).run(resume=resume)

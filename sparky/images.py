@@ -44,5 +44,10 @@ def encode_image(path: str | Path) -> dict:
     mt = media_type(p)
     if not mt:
         raise ValueError(f"unsupported image type: {p.suffix}")
-    data = base64.standard_b64encode(p.read_bytes()).decode("ascii")
-    return {"type": "image", "source": {"type": "base64", "media_type": mt, "data": data}}
+    return encode_image_bytes(p.read_bytes(), mt)
+
+
+def encode_image_bytes(data: bytes, media: str = "image/png") -> dict:
+    """Return a normalized image content block from raw bytes (e.g. clipboard)."""
+    b64 = base64.standard_b64encode(data).decode("ascii")
+    return {"type": "image", "source": {"type": "base64", "media_type": media, "data": b64}}

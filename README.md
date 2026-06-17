@@ -94,10 +94,23 @@ at <https://platform.claude.com>). It's stored only in `data/sparky.env` on the 
 |---|---|
 | `/help` | list commands |
 | `/model [sonnet\|opus\|<id>]` | switch the online model |
-| `/img <path> [message]` | attach an image to the next message |
+| `/img <path> [message]` | attach an image file to the next message |
+| `/paste` · **Ctrl-V** | paste an image from the clipboard (like Claude Code) |
+| `/resume` · `/sessions` | resume your last conversation · list saved ones |
 | `/context` | show what's loaded from `context/` |
 | `/yolo` | toggle auto-approval of shell commands |
 | `/clear` · `/quit` | clear history · exit |
+
+Conversations auto-save to `data/sessions/` after every turn; `./sparky.cmd --resume`
+re-opens the most recent one on launch.
+
+### Images (text + pictures)
+- **Files / paths:** `/img screenshot.png what's this error?` (paths in a prompt are auto-detected).
+- **Clipboard:** `/paste` or **Ctrl-V** pastes a copied screenshot (uses `xclip`/`wl-clipboard`
+  on Linux, `pngpaste` on macOS, PowerShell on Windows).
+- **Online** images go to Claude. **Offline**, images are passed to the local model — text
+  models ignore them; to *understand* images offline, set a vision model:
+  `SPARKY_LOCAL_MODEL=qwen2.5-vl:3b` in `data/sparky.env` and pull it once.
 
 Run `python -m sparky --self-test` (or `sparky.cmd --self-test`) to check the runtime,
 key, connectivity, and local model.
@@ -114,6 +127,21 @@ Sparky/
 ├── data/               key, sessions, redirected HOME/config (gitignored)
 └── tools/              setup_usb.sh / .ps1, fetch_runtime.sh
 ```
+
+## Compared to OpenClaude-Portable
+
+Built on the same principles, with a few deliberate differences:
+
+| OpenClaude-Portable | Sparky |
+|---|---|
+| 9 providers (NIM, OpenRouter, OpenAI, …) | **Claude API + local Qwen** (by design — Claude online, Qwen offline) |
+| Zero footprint (`data/`) | ✅ same |
+| Limitless mode | ✅ `/yolo` |
+| Session resume (`RESUME.bat`) | ✅ auto-save + `/resume`, `/sessions`, `--resume` |
+| Web dashboard | TUI-only (by design) |
+| Cross-platform launchers | ✅ one polyglot `sparky.cmd` self-detects the OS |
+| Vision via local vision models | ✅ images passed to the local model; **plus clipboard paste / Ctrl-V** (which OpenClaude's terminal does *not* have) |
+| First-run downloads Node engine | first-run downloads a portable Python + Ollama; pure-Python app, no engine dependency |
 
 ## How it works
 
