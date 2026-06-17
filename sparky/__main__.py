@@ -84,7 +84,18 @@ def first_run_setup(cfg):
     return cfg
 
 
+def _force_utf8():
+    # Windows consoles default to cp1252/cp437, which can't encode ✓ ● ⚙ etc.
+    # and would crash on print(). Force UTF-8 (with replace as a safety net).
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except Exception:
+            pass
+
+
 def main(argv=None) -> int:
+    _force_utf8()
     argv = list(sys.argv[1:] if argv is None else argv)
     cfg = config_mod.load()
     if "--yolo" in argv:

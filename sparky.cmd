@@ -8,6 +8,7 @@
 :; # labels) and runs the batch section.
 :; # =====================================================================
 :; DIR="$(cd "$(dirname "$0")" && pwd)"
+:; case "$(uname -s 2>/dev/null)" in MINGW*|MSYS*|CYGWIN*) exec cmd //c "$(cygpath -w "$DIR/START.bat" 2>/dev/null || echo "$DIR\\START.bat")" "$@" ;; esac
 :; exec bash "$DIR/start.sh" "$@"
 
 @echo off

@@ -1,7 +1,13 @@
 @echo off
-REM Sparky launcher (Windows). Plug in the stick, double-click this file.
-REM Redirects HOME/config/Ollama into the stick, starts Ollama, launches the TUI.
+REM Sparky launcher (Windows). Plug in the stick, run `sparky.cmd` (or double-click).
+REM Plug-and-play: if the Windows runtime isn't on the stick yet, it auto-fetches it
+REM ADDITIVELY (no wipe, no re-setup) and launches. Works in PowerShell and cmd.
 setlocal enabledelayedexpansion
+
+REM UTF-8 console + Python I/O so ✓ ● ⚙ etc. render instead of crashing.
+chcp 65001 >nul 2>&1
+set "PYTHONUTF8=1"
+set "PYTHONIOENCODING=utf-8"
 
 set "ROOT=%~dp0"
 if "%ROOT:~-1%"=="\" set "ROOT=%ROOT:~0,-1%"
@@ -24,20 +30,23 @@ set "PY=%RT%\python\windows-x86_64\python.exe"
 set "PYTHONPATH=%RT%\pylib"
 set "OLLAMA_BIN=%RT%\ollama\pkg\windows-x86_64\ollama.exe"
 
+REM ---- first run on this PC: auto-fetch the Windows runtime (additive) ------
 if not exist "%PY%" (
-  echo Sparky: runtime not set up for Windows yet.
-  echo Run the one-time setup in PowerShell:
-  echo     powershell -ExecutionPolicy Bypass -File "%ROOT%\tools\setup_usb.ps1" -InPlace
+  echo Sparky: setting up the Windows runtime ^(first run on this PC^)...
+  powershell -NoProfile -ExecutionPolicy Bypass -File "%ROOT%\tools\fetch_runtime.ps1" -Root "%ROOT%"
+)
+if not exist "%PY%" (
+  echo Sparky: could not set up the Windows runtime ^(need internet on the first Windows run^).
   pause
   exit /b 1
 )
 
-REM ---- start Ollama in the background (for offline + fallback) --------------
+REM ---- start Ollama in the background (offline + mid-session fallback) -------
 if exist "%OLLAMA_BIN%" (
   start "" /b "%OLLAMA_BIN%" serve > "%ROOT%\data\ollama.log" 2>&1
 )
 
-REM ---- launch --------------------------------------------------------------
+REM ---- launch the TUI ------------------------------------------------------
 "%PY%" -m sparky %*
 
 REM ---- stop Ollama on exit -------------------------------------------------

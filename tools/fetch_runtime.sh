@@ -106,14 +106,20 @@ fetch_ollama() {  # os arch
   fi
   local url="https://github.com/ollama/ollama/releases/download/${OLLAMA_TAG}/${asset}"
   log "downloading ollama $os-$arch …"
-  local tmp; tmp="$(mktemp -d)"
+  local tmp; tmp="$(mktemp -d)"; mkdir -p "$tmp/x"
   curl -fL --retry 3 -o "$tmp/$asset" "$url"
-  mkdir -p "$dest"
   case "$asset" in
-    *.tar.zst) tar --zstd -xf "$tmp/$asset" -C "$tmp/x" --one-top-level 2>/dev/null || { mkdir -p "$tmp/x"; tar --zstd -xf "$tmp/$asset" -C "$tmp/x"; }; cp -RL "$tmp/x/." "$dest/" ;;
-    *.tgz)     mkdir -p "$tmp/x"; tar -xzf "$tmp/$asset" -C "$tmp/x"; cp -RL "$tmp/x/." "$dest/" ;;
-    *.zip)     mkdir -p "$tmp/x"; unzip -oq "$tmp/$asset" -d "$tmp/x"; cp -RL "$tmp/x/." "$dest/" ;;
+    *.tar.zst) tar --zstd -xf "$tmp/$asset" -C "$tmp/x" ;;
+    *.tgz)     tar -xzf "$tmp/$asset" -C "$tmp/x" ;;
+    *.zip)     unzip -oq "$tmp/$asset" -d "$tmp/x" ;;
   esac
+  # Prune GPU runner dirs (~GBs) — portable use is CPU-only. Done in tmp before
+  # copying so we never write the heavy dirs to the (slow) stick.
+  if [ "${SPARKY_INCLUDE_GPU:-0}" != "1" ]; then
+    find "$tmp/x" -type d \( -name 'cuda*' -o -name 'rocm*' -o -name 'vulkan*' \) -prune -exec rm -rf {} + 2>/dev/null || true
+  fi
+  mkdir -p "$dest"
+  cp -RL "$tmp/x/." "$dest/"
   rm -rf "$tmp"
   log "ollama $os-$arch ready"
 }
