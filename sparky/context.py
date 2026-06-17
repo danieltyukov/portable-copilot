@@ -8,8 +8,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-MAX_TOTAL = 60_000        # cap total context bytes
-MAX_PER_FILE = 12_000
+MAX_TOTAL = 400_000       # cap total context bytes (~100K tokens) sent each turn
+MAX_PER_FILE = 200_000
+MAX_LISTED = 60           # cap the file-tree listing so attachment dumps don't flood
 TEXT_SUFFIXES = {
     ".txt", ".md", ".py", ".js", ".ts", ".tsx", ".jsx", ".json", ".yaml", ".yml",
     ".toml", ".ini", ".cfg", ".sh", ".bash", ".html", ".css", ".c", ".h", ".cpp",
@@ -31,8 +32,11 @@ def load_context(context_dir: Path) -> str:
         return ""
 
     tree_lines = [str(p.relative_to(context_dir)) for p in files]
+    shown = tree_lines[:MAX_LISTED]
+    if len(tree_lines) > MAX_LISTED:
+        shown.append(f"… (+{len(tree_lines) - MAX_LISTED} more files)")
     parts = ["The user has dropped these files into the drive's context/ folder:",
-             "\n".join(f"  - {t}" for t in tree_lines), ""]
+             "\n".join(f"  - {t}" for t in shown), ""]
 
     total = sum(len(s) for s in parts)
     for p in files:
