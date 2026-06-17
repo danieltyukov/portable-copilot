@@ -145,16 +145,25 @@ fetch_pylib() {
 main() {
   local os arch; os="$(detect_os)"; arch="$(detect_arch)"
   log "host: $os-$arch  mode: $MODE"
-  fetch_python "$os" "$arch"
-  fetch_ollama "$os" "$arch"
-  fetch_pylib
-  if [ "$MODE" = "--all" ]; then
-    for t in linux-x86_64 linux-aarch64 macos-x86_64 macos-aarch64 windows-x86_64; do
-      [ "$t" = "$os-$arch" ] && continue
-      fetch_python "${t%-*}" "${t##*-}" || true
-      fetch_ollama "${t%-*}" "${t##*-}" || true
-    done
-  fi
+  case "$MODE" in
+    *-*)  # explicit target, e.g. windows-x86_64 — just add that one (+ shared pylib)
+      fetch_pylib
+      fetch_python "${MODE%-*}" "${MODE##*-}"
+      fetch_ollama "${MODE%-*}" "${MODE##*-}"
+      ;;
+    *)
+      fetch_python "$os" "$arch"
+      fetch_ollama "$os" "$arch"
+      fetch_pylib
+      if [ "$MODE" = "--all" ]; then
+        for t in linux-x86_64 linux-aarch64 macos-x86_64 macos-aarch64 windows-x86_64; do
+          [ "$t" = "$os-$arch" ] && continue
+          fetch_python "${t%-*}" "${t##*-}" || true
+          fetch_ollama "${t%-*}" "${t##*-}" || true
+        done
+      fi
+      ;;
+  esac
   log "runtime fetch complete."
 }
 main
