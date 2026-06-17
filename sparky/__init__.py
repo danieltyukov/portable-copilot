@@ -5,4 +5,4 @@ back to a local Qwen model served by a bundled Ollama, switching automatically
 mid-session. See README.md and docs/superpowers/specs/ for the full design.
 """
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"

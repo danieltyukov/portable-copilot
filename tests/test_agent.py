@@ -13,6 +13,11 @@ class ScriptedRouter:
         self.backend = "test"
     def chat(self, messages, tools=None, system=None):
         return self.replies.pop(0), "test"
+    def chat_stream(self, messages, tools=None, system=None, on_text=None):
+        reply = self.replies.pop(0)
+        if on_text and reply.text:
+            on_text(reply.text)        # simulate streaming the text
+        return reply, "test"
 
 
 def test_agent_runs_tool_then_returns_text(tmp_path):

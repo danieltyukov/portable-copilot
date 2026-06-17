@@ -41,6 +41,9 @@ background, and launches the copilot. Nothing is installed on the host machine.
   tagged `(fallback)`. The header always shows `● online` / `● OFFLINE`.
 - 🛠 **Real coding agent** — tools for read / write / edit files, list dirs, search, and
   run shell commands (with an approval prompt unless you `/yolo`).
+- ✨ **Live, Claude-Code-style TUI** — responses **stream** as they're generated (you see it
+  think and watch each tool run as a card), markdown-formatted output, a clear `›` input with
+  a bottom toolbar showing the active model, and **Ctrl-T to cycle models** (Sonnet ↔ Opus).
 - 🖼 **Text *and* image prompts** — attach a screenshot with `/img shot.png what's this?`
   (images go to Claude when online).
 - 📂 **Per-drive context folder** — drop notes, specs, or code into `context/` on the

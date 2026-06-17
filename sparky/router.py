@@ -43,5 +43,21 @@ class Router:
         self.backend = f"qwen:{self.local.model}" + (" (fallback)" if self.last_fallback else "")
         return reply, self.backend
 
+    def chat_stream(self, messages, tools=None, system=None, on_text=None) -> tuple[Reply, str]:
+        """Streaming variant. Returns (reply, backend_label); on_text(delta) per chunk.
+        Falls back to local on a Claude error (only before any text has streamed)."""
+        self.last_fallback = False
+        if self._can_use_claude():
+            try:
+                reply = self.claude.chat_stream(messages, tools=tools, system=system, on_text=on_text)
+                self.backend = f"claude:{self.claude.model}"
+                return reply, self.backend
+            except ProviderError:
+                self.monitor.refresh()
+                self.last_fallback = True
+        reply = self.local.chat_stream(messages, tools=tools, system=system, on_text=on_text)
+        self.backend = f"qwen:{self.local.model}" + (" (fallback)" if self.last_fallback else "")
+        return reply, self.backend
+
     def set_online_model(self, model: str) -> None:
         self.claude.model = model

@@ -45,21 +45,22 @@ class ClaudeProvider:
         except OSError:
             return False
 
-    def chat(self, messages: list[dict], tools=None, system: str | None = None) -> Reply:
+    def _request(self, payload: dict):
         if not self.cfg.anthropic_api_key:
             raise ProviderError("no Anthropic API key configured")
-        payload = self.build_payload(messages, tools, system)
         data = json.dumps(payload).encode("utf-8")
-        req = urllib.request.Request(
-            API_URL,
-            data=data,
-            method="POST",
+        return urllib.request.Request(
+            API_URL, data=data, method="POST",
             headers={
                 "content-type": "application/json",
                 "x-api-key": self.cfg.anthropic_api_key,
                 "anthropic-version": API_VERSION,
             },
         )
+
+    def chat(self, messages: list[dict], tools=None, system: str | None = None) -> Reply:
+        payload = self.build_payload(messages, tools, system)
+        req = self._request(payload)
         try:
             with urllib.request.urlopen(req, timeout=120, context=ssl.create_default_context()) as resp:
                 body = json.loads(resp.read().decode("utf-8"))
@@ -69,6 +70,73 @@ class ClaudeProvider:
         except (urllib.error.URLError, OSError, TimeoutError) as e:
             raise ProviderError(f"Claude API connection error: {e}") from e
         return self._parse(body)
+
+    def chat_stream(self, messages: list[dict], tools=None, system: str | None = None,
+                    on_text=None) -> Reply:
+        """Stream the Messages API (SSE). Calls on_text(delta) for each text chunk
+        and returns the final Reply (with any tool_use blocks assembled)."""
+        payload = self.build_payload(messages, tools, system)
+        payload["stream"] = True
+        req = self._request(payload)
+        texts: list[str] = []
+        tool_calls: list[ToolCall] = []
+        blocks: dict[int, dict] = {}      # index -> {type, id, name, buf/text}
+        stop_reason = None
+        try:
+            with urllib.request.urlopen(req, timeout=300, context=ssl.create_default_context()) as resp:
+                for raw in resp:
+                    line = raw.decode("utf-8", "replace").strip()
+                    if not line.startswith("data:"):
+                        continue
+                    try:
+                        ev = json.loads(line[5:].strip())
+                    except json.JSONDecodeError:
+                        continue
+                    etype = ev.get("type")
+                    if etype == "content_block_start":
+                        cb = ev.get("content_block", {})
+                        blocks[ev["index"]] = {"type": cb.get("type"), "id": cb.get("id"),
+                                               "name": cb.get("name"), "buf": "", "text": ""}
+                    elif etype == "content_block_delta":
+                        b = blocks.get(ev["index"])
+                        if not b:
+                            continue
+                        d = ev.get("delta", {})
+                        if d.get("type") == "text_delta":
+                            t = d.get("text", "")
+                            b["text"] += t
+                            texts.append(t)
+                            if on_text:
+                                on_text(t)
+                        elif d.get("type") == "input_json_delta":
+                            b["buf"] += d.get("partial_json", "")
+                    elif etype == "message_delta":
+                        stop_reason = ev.get("delta", {}).get("stop_reason", stop_reason)
+                    elif etype == "error":
+                        raise ProviderError(f"Claude stream error: {ev.get('error')}")
+        except urllib.error.HTTPError as e:
+            detail = e.read().decode("utf-8", "replace")[:500]
+            raise ProviderError(f"Claude API HTTP {e.code}: {detail}") from e
+        except (urllib.error.URLError, OSError, TimeoutError) as e:
+            raise ProviderError(f"Claude API connection error: {e}") from e
+
+        norm_blocks: list[dict] = []
+        for idx in sorted(blocks):
+            b = blocks[idx]
+            if b["type"] == "text":
+                norm_blocks.append({"type": "text", "text": b["text"]})
+            elif b["type"] == "tool_use":
+                try:
+                    inp = json.loads(b["buf"]) if b["buf"].strip() else {}
+                except json.JSONDecodeError:
+                    inp = {}
+                tc = ToolCall(id=b["id"], name=b["name"], input=inp)
+                tool_calls.append(tc)
+                norm_blocks.append({"type": "tool_use", "id": tc.id, "name": tc.name, "input": tc.input})
+        if not norm_blocks:
+            norm_blocks.append({"type": "text", "text": ""})
+        return Reply(text="".join(texts), tool_calls=tool_calls,
+                     content_blocks=norm_blocks, stop_reason=stop_reason)
 
     @staticmethod
     def _parse(body: dict) -> Reply:

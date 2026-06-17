@@ -121,6 +121,49 @@ class LocalProvider:
         tool_names = [t["name"] for t in tools] if tools else []
         return self._parse(body, tool_names)
 
+    def chat_stream(self, messages: list[dict], tools=None, system: str | None = None,
+                    on_text=None) -> Reply:
+        """Stream Ollama /api/chat (NDJSON). Calls on_text(delta) per chunk."""
+        payload = self.build_payload(messages, tools, system)
+        payload["stream"] = True
+        data = json.dumps(payload).encode("utf-8")
+        req = urllib.request.Request(
+            f"{self.host}/api/chat", data=data, method="POST",
+            headers={"content-type": "application/json"},
+        )
+        texts: list[str] = []
+        raw_tool_calls: list[dict] = []
+        done_reason = None
+        try:
+            with urllib.request.urlopen(req, timeout=600) as resp:
+                for raw in resp:
+                    line = raw.decode("utf-8", "replace").strip()
+                    if not line:
+                        continue
+                    try:
+                        ev = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    msg = ev.get("message", {}) or {}
+                    t = msg.get("content", "")
+                    if t:
+                        texts.append(t)
+                        if on_text:
+                            on_text(t)
+                    if msg.get("tool_calls"):
+                        raw_tool_calls.extend(msg["tool_calls"])
+                    if ev.get("done"):
+                        done_reason = ev.get("done_reason", done_reason)
+        except urllib.error.HTTPError as e:
+            detail = e.read().decode("utf-8", "replace")[:300]
+            raise ProviderError(f"Ollama HTTP {e.code}: {detail}") from e
+        except (urllib.error.URLError, OSError, TimeoutError) as e:
+            raise ProviderError(f"Ollama connection error: {e}") from e
+        body = {"message": {"content": "".join(texts), "tool_calls": raw_tool_calls},
+                "done_reason": done_reason}
+        tool_names = [t["name"] for t in tools] if tools else []
+        return self._parse(body, tool_names)
+
     @staticmethod
     def _parse(body: dict, tool_names=()) -> Reply:
         msg = body.get("message", {}) or {}

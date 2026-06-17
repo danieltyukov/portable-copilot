@@ -54,11 +54,14 @@ class Agent:
         system = self.system_prompt()
         final_text = ""
         for _ in range(MAX_ITERS):
-            reply, backend = self.router.chat(self.history, tools=tools_mod.TOOL_SPECS, system=system)
+            emit("thinking")
+            reply, backend = self.router.chat_stream(
+                self.history, tools=tools_mod.TOOL_SPECS, system=system,
+                on_text=lambda t: emit("assistant_delta", text=t),
+            )
             emit("backend", backend=backend, fallback=self.router.last_fallback)
             self.history.append({"role": "assistant", "content": reply.content_blocks})
-            if reply.text:
-                emit("assistant", text=reply.text)
+            emit("assistant_done", text=reply.text)
             if not reply.wants_tools:
                 final_text = reply.text
                 break
@@ -71,7 +74,7 @@ class Agent:
             self.history.append({"role": "user", "content": results})
         else:
             final_text = "[Stopped after too many tool iterations.]"
-            emit("assistant", text=final_text)
+            emit("assistant_done", text=final_text)
         return final_text
 
     def _confirm(self, on_event):
