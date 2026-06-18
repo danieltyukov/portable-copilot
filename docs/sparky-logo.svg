@@ -151,12 +151,12 @@
 
   <!-- wordmark -->
   <text x="404" y="214" font-family="DejaVu Sans, Verdana, sans-serif" font-weight="bold" font-size="62" fill="#e6edf3">Sparky</text>
-  <text x="406" y="252" font-family="DejaVu Sans Mono, monospace" font-size="18" fill="#9aa4b0">portable copilot &#183; claude online &#183; qwen offline &#183; on any USB</text>
+  <text x="406" y="252" font-family="DejaVu Sans Mono, monospace" font-size="18" fill="#9aa4b0">portable copilot &#183; fully local &#183; qwen &#183; on any USB</text>
 
   <g transform="translate(406,276)" font-family="DejaVu Sans Mono, monospace">
     <rect x="0" y="0" width="140" height="40" rx="9" fill="#161b22" stroke="#30363d" stroke-width="2"/>
     <circle cx="22" cy="20" r="6" fill="#34d399"/>
-    <text x="38" y="27" font-size="17" fill="#9fb0c0">claude api</text>
+    <text x="38" y="27" font-size="17" fill="#9fb0c0">fast &#8596; max</text>
   </g>
   <g transform="translate(560,276)" font-family="DejaVu Sans Mono, monospace">
     <rect x="0" y="0" width="200" height="40" rx="9" fill="#161b22" stroke="#30363d" stroke-width="2"/>
