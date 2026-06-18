@@ -30,4 +30,4 @@ MASCOT = r"""
  ██  ██
 """.strip("\n")
 
-TAGLINE = "portable copilot · claude online · qwen offline"
+TAGLINE = "portable copilot · fully local · qwen"

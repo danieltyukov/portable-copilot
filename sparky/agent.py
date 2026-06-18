@@ -16,12 +16,12 @@ from .router import Router
 MAX_ITERS = 12
 
 SYSTEM_BASE = (
-    "You are Sparky, a portable AI coding copilot that runs from a USB stick. "
+    "You are Sparky, a portable AI coding copilot that runs fully locally from a "
+    "USB stick on a local Qwen model (no internet, nothing leaves the machine). "
     "You help with software engineering tasks: reading and editing files, running "
     "commands, searching code, and answering questions. Use the provided tools to "
     "inspect and modify the project. Be concise and act directly. The working "
-    "directory is the folder the user launched you in.\n"
-    "When offline you run on a local model with the same tools; keep working."
+    "directory is the folder the user launched you in."
 )
 
 

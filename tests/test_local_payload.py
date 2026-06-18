@@ -12,7 +12,7 @@ def test_payload_translates_messages_and_tools(tmp_path):
     msgs = [{"role": "user", "content": [text_block("hello")]}]
     tools = [{"name": "list_dir", "description": "d", "input_schema": {"type": "object", "properties": {}}}]
     payload = p.build_payload(msgs, tools, "sys prompt")
-    assert payload["model"] == config.DEFAULT_LOCAL_MODEL
+    assert payload["model"] == config.DEFAULT_MAX_MODEL  # default tier is max
     assert payload["stream"] is False
     assert payload["messages"][0] == {"role": "system", "content": "sys prompt"}
     assert payload["messages"][1] == {"role": "user", "content": "hello"}

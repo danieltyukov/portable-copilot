@@ -1,9 +1,9 @@
-"""Normalized provider types shared by the Claude and Ollama backends.
+"""Normalized provider types for the local Ollama backend.
 
-The normalized message/block schema is intentionally Anthropic's own shape, so
-the Claude path is a near-passthrough and only the Ollama adapter does
-translation work. A `Reply` carries the assistant's content blocks (text +
-tool_use) so the agent loop can append them to history verbatim.
+The normalized message/block schema uses Anthropic's block shape (text /
+tool_use / tool_result) as a stable internal format; the Ollama adapter
+translates to and from it. A `Reply` carries the assistant's content blocks
+(text + tool_use) so the agent loop can append them to history verbatim.
 """
 
 from __future__ import annotations

@@ -19,8 +19,12 @@ MAX_PREDICT = 2048
 class LocalProvider:
     def __init__(self, cfg, model: str | None = None):
         self.cfg = cfg
-        self.model = model or cfg.local_model
+        self.model = model or cfg.model
         self.host = cfg.ollama_host.rstrip("/")
+
+    def set_model(self, model: str) -> None:
+        """Point this provider at a different Ollama model (used for tier switches)."""
+        self.model = model
 
     # ---- payload construction (pure; unit-tested) -----------------------
     def build_payload(self, messages: list[dict], tools, system: str | None) -> dict:

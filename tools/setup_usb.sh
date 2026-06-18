@@ -1,28 +1,35 @@
 #!/usr/bin/env bash
-# Install Sparky onto a USB stick (Linux / macOS).
+# Install Sparky (fully local) onto a USB stick (Linux / macOS).
 #
 #   setup_usb.sh [--mount <dir>] [--cross] [--no-model] [--yes]
+#               [--preset small|medium|large|xl] [--fast TAG] [--max TAG]
 #
 #   --mount <dir>  target mountpoint (default: /media/$USER/Sparky, else
 #                  /Volumes/Sparky on macOS)
 #   --cross        also fetch macOS + Windows runtimes (portable across OSes;
 #                  larger download). Default: current OS only.
-#   --no-model     skip pulling the local Qwen model
+#   --no-model     skip pulling the local Qwen models
+#   --preset       model set sized to the stick (default large, ~32 GB):
+#                    small (~8 GB) · medium (~16 GB) · large (~32 GB) · xl (~64 GB+)
+#   --fast TAG     override the fast-tier model · --max TAG override the max tier
 #   --yes          don't prompt for confirmation (DESTRUCTIVE — wipes the stick)
 #
 # The stick should already be named "Sparky" (relabel a fresh USB with your
 # OS disk utility, or `sudo fatlabel /dev/sdXN SPARKY` after unmounting).
 set -euo pipefail
 
-LOCAL_MODEL="${SPARKY_LOCAL_MODEL:-qwen2.5-coder:3b}"
 SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"   # repo root
 
 MOUNT=""; CROSS="--this-os"; PULL_MODEL=1; ASSUME_YES=0
+PRESET="large"; FAST=""; MAX=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --mount) MOUNT="$2"; shift 2 ;;
     --cross) CROSS="--all"; shift ;;
     --no-model) PULL_MODEL=0; shift ;;
+    --preset) PRESET="$2"; shift 2 ;;
+    --fast) FAST="$2"; shift 2 ;;
+    --max) MAX="$2"; shift 2 ;;
     --yes|-y) ASSUME_YES=1; shift ;;
     *) echo "unknown arg: $1"; exit 2 ;;
   esac
@@ -46,7 +53,7 @@ esac
 echo "Installing Sparky:"
 echo "  source : $SRC"
 echo "  target : $MOUNT   (label should be 'Sparky')"
-echo "  runtime: $CROSS    model: $([ $PULL_MODEL = 1 ] && echo "$LOCAL_MODEL" || echo skip)"
+echo "  runtime: $CROSS    models: $([ $PULL_MODEL = 1 ] && echo "preset=$PRESET" || echo skip)"
 echo
 echo "WARNING: this DELETES everything currently on $MOUNT."
 if [ "$ASSUME_YES" != 1 ]; then
@@ -82,33 +89,15 @@ EOF
 echo "Fetching runtime onto the stick (this can take a while)…"
 bash "$MOUNT/tools/fetch_runtime.sh" "$MOUNT" "$CROSS"
 
-# ---- pre-pull the local model so offline works out of the box -------------
+# ---- pre-pull the tier models so offline works out of the box -------------
+# Delegated to set_models.sh, which also writes the tier overrides into
+# data/sparky.env. Use the same tool later to swap models for a different stick.
 if [ "$PULL_MODEL" = 1 ]; then
-  echo "Pulling local model $LOCAL_MODEL into the stick …"
-  export OLLAMA_MODELS="$MOUNT/runtime/ollama/models"
-  export OLLAMA_HOST="127.0.0.1:11500"
-  OS=linux; case "$(uname -s)" in Darwin) OS=macos ;; esac
-  ARCH=x86_64; case "$(uname -m)" in aarch64|arm64) ARCH=aarch64 ;; esac
-  # Prefer the host's executable ollama for the pull (the bundled copy on a FAT
-  # stick has no exec bit). Falls back to the bundled binary if no host ollama.
-  OB=""
-  command -v ollama >/dev/null 2>&1 && OB="$(command -v ollama)"
-  if [ -z "$OB" ]; then
-    for c in "$MOUNT/runtime/ollama/pkg/$OS-$ARCH/bin/ollama" "$MOUNT/runtime/ollama/pkg/$OS-$ARCH/ollama"; do
-      [ -e "$c" ] && OB="$c" && break
-    done
-  fi
-  if [ -n "$OB" ]; then
-    export LD_LIBRARY_PATH="$(dirname "$OB")/../lib/ollama:${LD_LIBRARY_PATH:-}"
-    "$OB" serve >/tmp/sparky-setup-ollama.log 2>&1 &
-    SPID=$!
-    for _ in $(seq 1 30); do curl -sf "http://127.0.0.1:11500/api/tags" >/dev/null 2>&1 && break; sleep 1; done
-    "$OB" pull "$LOCAL_MODEL"
-    kill "$SPID" 2>/dev/null || true
-    echo "Model pulled into $OLLAMA_MODELS"
-  else
-    echo "No ollama binary available to pull the model; skipping."
-  fi
+  SM_ARGS=(--mount "$MOUNT" --preset "$PRESET")
+  [ -n "$FAST" ] && SM_ARGS+=(--fast "$FAST")
+  [ -n "$MAX" ] && SM_ARGS+=(--max "$MAX")
+  echo "Pulling tier models (preset=$PRESET) into the stick …"
+  bash "$MOUNT/tools/set_models.sh" "${SM_ARGS[@]}"
 fi
 
 echo

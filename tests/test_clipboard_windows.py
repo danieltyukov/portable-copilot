@@ -19,6 +19,10 @@ def _path_from_save_cmd(cmd):
 
 def test_windows_grab_screenshot(monkeypatch):
     monkeypatch.setattr(clipboard.os, "name", "nt")
+    # Isolate the Windows branch: skip the Linux X11/Wayland paths so a real
+    # desktop clipboard on the dev machine can't leak into these tests.
+    monkeypatch.delenv("WAYLAND_DISPLAY", raising=False)
+    monkeypatch.delenv("DISPLAY", raising=False)
 
     def fake_run_text(cmd):
         if "GetImage" in " ".join(cmd) and "Save(" in " ".join(cmd):
@@ -37,6 +41,10 @@ def test_windows_grab_screenshot(monkeypatch):
 
 def test_windows_grab_nothing(monkeypatch):
     monkeypatch.setattr(clipboard.os, "name", "nt")
+    # Isolate the Windows branch: skip the Linux X11/Wayland paths so a real
+    # desktop clipboard on the dev machine can't leak into these tests.
+    monkeypatch.delenv("WAYLAND_DISPLAY", raising=False)
+    monkeypatch.delenv("DISPLAY", raising=False)
     monkeypatch.setattr(clipboard, "_run_text", lambda cmd: "")  # PS writes nothing
     assert clipboard.grab_image() is None
 
@@ -45,6 +53,10 @@ def test_windows_grab_file_drop(tmp_path, monkeypatch):
     img = tmp_path / "shot.jpg"
     img.write_bytes(PNG)
     monkeypatch.setattr(clipboard.os, "name", "nt")
+    # Isolate the Windows branch: skip the Linux X11/Wayland paths so a real
+    # desktop clipboard on the dev machine can't leak into these tests.
+    monkeypatch.delenv("WAYLAND_DISPLAY", raising=False)
+    monkeypatch.delenv("DISPLAY", raising=False)
 
     def fake_run_text(cmd):
         if "GetFileDropList" in " ".join(cmd):

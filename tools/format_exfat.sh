@@ -5,8 +5,8 @@
 # Why: a FAT/vfat stick mounts with `showexec`, which marks non-.exe files
 # non-executable, so Ollama can't launch its `llama-server` inference binary.
 # exFAT is cross-platform (Windows/macOS/Linux), supports files >4GB, and mounts
-# executable on Linux — so offline inference works. Online (Claude API) works on
-# FAT already; only offline needs this.
+# executable on Linux — so the local model runs. Sparky is fully local, so this
+# is required on Linux for it to work at all.
 #
 #   sudo tools/format_exfat.sh [--device /dev/sdX] [--mount <dir>] [--yes]
 #

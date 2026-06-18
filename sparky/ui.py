@@ -1,9 +1,10 @@
 """Sparky terminal UI — a Claude-Code-style REPL in the Sparky theme.
 
 Live streaming (you see it think + its operations), markdown output with tool
-cards, a clear input area, and a bottom toolbar showing the active model that you
-can cycle with Ctrl-T. Degrades to plain print/input when rich/prompt_toolkit are
-unavailable so it still runs anywhere.
+cards, a clear input area, and a bottom toolbar showing the active *tier* that
+you can cycle with Ctrl-T. Sparky is fully local; the tier picks speed vs.
+accuracy (fast ↔ max). Degrades to plain print/input when rich/prompt_toolkit
+are unavailable so it still runs anywhere.
 """
 
 from __future__ import annotations
@@ -16,7 +17,6 @@ from . import config as config_mod
 from . import images as images_mod
 from . import sessions as sessions_mod
 from .agent import Agent
-from .connectivity import Monitor
 from .router import Router
 from .theme import C, MASCOT, TAGLINE
 
@@ -41,13 +41,10 @@ try:
 except Exception:  # pragma: no cover
     _PTK = False
 
-# Online models you can cycle through with Ctrl-T (offline is automatic).
-ONLINE_MODELS = [("Sonnet 4.6", config_mod.DEFAULT_MODEL), ("Opus 4.8", config_mod.OPUS_MODEL)]
-
 HELP = """\
 Commands:
   /help              show this help
-  /model [name]      switch online model: 'sonnet', 'opus', or a full id (or Ctrl-T)
+  /model [name]      switch tier: 'fast' or 'max' (aliases haiku/sonnet/opus), or Ctrl-T
   /img <path> ...    attach an image file to the next message (also auto-detected)
   /paste  (or /v)    paste an image from the clipboard.
                      Linux/macOS: Ctrl-V also works. Windows: type /paste
@@ -58,7 +55,8 @@ Commands:
   /clear             clear the conversation history
   /yolo              toggle auto-approval of shell commands
   /quit              exit
-Keys: Ctrl-T cycle model · Ctrl-V paste image · ↑/↓ history
+Tiers:  fast = quick, runs anywhere · max = best (a 30B MoE; needs more RAM)
+Keys: Ctrl-T cycle tier · Ctrl-V paste image · ↑/↓ history
 """
 
 
@@ -66,14 +64,13 @@ class UI:
     def __init__(self, cfg):
         self.cfg = cfg
         self.console = Console() if _RICH else None
-        self.monitor = Monitor().start()
-        self.router = Router(cfg, monitor=self.monitor)
+        self.router = Router(cfg)
         self.agent = Agent(cfg, self.router, cwd=Path.cwd())
         self.pending_images: list[dict] = []
         self.session_id = sessions_mod.new_id()
-        # current online model index (match cfg.model if it's one of ours)
-        self.model_idx = next((i for i, (_, m) in enumerate(ONLINE_MODELS) if m == cfg.model), 0)
-        self.router.set_online_model(ONLINE_MODELS[self.model_idx][1])
+        # current tier index into cfg.tiers (defaults to cfg.tier)
+        self.tier_idx = next((i for i, (name, _) in enumerate(cfg.tiers) if name == cfg.tier), 0)
+        self.router.set_tier(cfg.tiers[self.tier_idx][0])
         # streaming render state
         self._spin = None
         self._md = None
@@ -93,26 +90,28 @@ class UI:
                 bottom_toolbar=self._bottom_toolbar,
             )
 
-    # ---- model selection -----------------------------------------------
-    def _is_online(self) -> bool:
-        return self.monitor.online and bool(self.cfg.anthropic_api_key)
-
+    # ---- tier selection -------------------------------------------------
     def _model_label(self) -> str:
-        if self._is_online():
-            return ONLINE_MODELS[self.model_idx][0]
-        return f"{self.cfg.local_model} (offline)"
+        name, model = self.cfg.tiers[self.tier_idx]
+        return f"{name} · {model}"
 
-    def _cycle_model(self):
-        self.model_idx = (self.model_idx + 1) % len(ONLINE_MODELS)
-        self.router.set_online_model(ONLINE_MODELS[self.model_idx][1])
+    def _cycle_tier(self):
+        self.tier_idx = (self.tier_idx + 1) % len(self.cfg.tiers)
+        self.router.set_tier(self.cfg.tiers[self.tier_idx][0])
+
+    def _select_tier(self, name: str) -> str:
+        tier = config_mod.normalize_tier(name, self.cfg.tiers[self.tier_idx][0])
+        self.tier_idx = next((i for i, (n, _) in enumerate(self.cfg.tiers) if n == tier), self.tier_idx)
+        self.router.set_tier(tier)
+        return tier
 
     # ---- prompt_toolkit wiring -----------------------------------------
     def _key_bindings(self):
         kb = KeyBindings()
 
-        @kb.add("c-t")  # cycle online model
+        @kb.add("c-t")  # cycle tier
         def _(event):
-            self._cycle_model()
+            self._cycle_tier()
             event.app.invalidate()  # refresh toolbar
 
         @kb.add("c-v")  # paste clipboard image if present, else text
@@ -131,11 +130,9 @@ class UI:
         return kb
 
     def _bottom_toolbar(self):
-        online = self._is_online()
-        mark = "<ansigreen>● online</ansigreen>" if online else "<ansiyellow>● OFFLINE</ansiyellow>"
         imgs = f" · {len(self.pending_images)} img" if self.pending_images else ""
-        return HTML(f" <b>{self._model_label()}</b>  {mark}{imgs}   "
-                    f"Ctrl-T model · Ctrl-V paste · /help ")
+        return HTML(f" <b>{self._model_label()}</b>  <ansigreen>● local</ansigreen>{imgs}   "
+                    f"Ctrl-T tier · Ctrl-V paste · /help ")
 
     # ---- rendering helpers ---------------------------------------------
     def _print(self, *a, **k):
@@ -145,24 +142,22 @@ class UI:
             print(*[str(x) for x in a])
 
     def banner(self):
-        online = self._is_online()
         if self.console:
             info = Text()
             info.append(f"Sparky ", style=f"bold {C['brand']}")
             info.append(f"v{__version__}\n", style=C["muted"])
             info.append(self._model_label(), style=C["text"])
             info.append("  ·  ", style=C["border"])
-            info.append("● online" if online else "● OFFLINE", style=C["teal"] if online else C["amber"])
+            info.append("● local", style=C["teal"])
             info.append(f"\n{Path.cwd()}", style=C["muted"])
             grid = Table.grid(padding=(0, 2))
             grid.add_column(); grid.add_column()
             grid.add_row(Text(MASCOT, style=f"bold {C['brand']}"), info)
             self.console.print(grid)
-            self.console.print(f"[{C['muted']}]/help · Ctrl-T cycle model · /paste image (or Ctrl-V) · /resume[/]\n")
+            self.console.print(f"[{C['muted']}]/help · Ctrl-T cycle tier · /paste image (or Ctrl-V) · /resume[/]\n")
         else:
             print(MASCOT)
-            print(f"Sparky v{__version__} — {self._model_label()} — "
-                  + ("online" if online else "OFFLINE"))
+            print(f"Sparky v{__version__} — {self._model_label()} — local")
             print(f"{Path.cwd()}\n/help for commands\n")
 
     # ---- agent event handling (streaming) ------------------------------
@@ -200,7 +195,7 @@ class UI:
                 self._note = ""
         elif kind == "backend":
             if data.get("fallback"):
-                self._note = "⚠ connection lost — switched to the local model (fallback)"
+                self._note = "⚠ not enough memory for the max tier — downgraded to fast for this reply"
         elif kind == "tool_start":
             self._stop_live()
             self.console.print(Text.assemble(
@@ -223,7 +218,7 @@ class UI:
         elif kind == "tool_result":
             print(f"    {_short(data.get('output',''), 200)}")
         elif kind == "backend" and data.get("fallback"):
-            print("  (connection lost — using local model)")
+            print("  (not enough memory for max — downgraded to fast)")
         elif kind == "confirm":
             data["holder"]["approved"] = self._confirm(data["command"])
 
@@ -269,12 +264,11 @@ class UI:
                 continue
             images = self.pending_images
             self.pending_images = []
-            if self._is_online():
-                for p in images_mod.find_image_paths(line, cwd=Path.cwd()):
-                    try:
-                        images.append(images_mod.encode_image(p))
-                    except Exception:
-                        pass
+            for p in images_mod.find_image_paths(line, cwd=Path.cwd()):
+                try:
+                    images.append(images_mod.encode_image(p))
+                except Exception:
+                    pass
             try:
                 self.agent.run_turn(line, images=images, on_event=self.on_event)
                 sessions_mod.save(self.cfg, self.session_id, self.agent.history)
@@ -292,12 +286,10 @@ class UI:
             self._print(HELP)
         elif cmd == "/model":
             if not rest:
-                self._print(f"current model: {self._model_label()} (Ctrl-T to cycle)")
+                self._print(f"current tier: {self._model_label()} (Ctrl-T to cycle)")
             else:
-                model = {"sonnet": config_mod.DEFAULT_MODEL, "opus": self.cfg.opus_model}.get(rest, rest)
-                self.router.set_online_model(model)
-                self.model_idx = next((i for i, (_, m) in enumerate(ONLINE_MODELS) if m == model), self.model_idx)
-                self._print(f"online model → {model}")
+                tier = self._select_tier(rest)
+                self._print(f"tier → {self._model_label()}")
         elif cmd in ("/paste", "/v"):
             grabbed = clip_mod.grab_image()
             if grabbed:

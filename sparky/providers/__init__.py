@@ -1,1 +1,1 @@
-"""Provider implementations: Claude (online) and Ollama/Qwen (offline)."""
+"""Provider implementation: the local Ollama/Qwen backend (fully offline)."""

@@ -1,18 +1,22 @@
 <#
-  Install Sparky onto a USB stick (Windows).
+  Install Sparky (fully local) onto a USB stick (Windows).
 
-    powershell -ExecutionPolicy Bypass -File tools\setup_usb.ps1 [-Drive E:] [-NoModel] [-Yes]
+    powershell -ExecutionPolicy Bypass -File tools\setup_usb.ps1 `
+        [-Drive E:] [-NoModel] [-Yes] [-Preset small|medium|large|xl] [-Fast TAG] [-Max TAG]
 
   The stick should already be named "Sparky" (rename it in Explorer, or
   `label E: SPARKY`). Auto-detects a volume labeled "Sparky" if -Drive is omitted.
-  DESTRUCTIVE: wipes the target drive's contents.
+  -Preset sizes the model set to the stick (default large). DESTRUCTIVE: wipes
+  the target drive's contents.
 #>
 param(
   [string]$Drive = "",
   [switch]$NoModel,
   [switch]$Yes,
   [switch]$InPlace,
-  [string]$LocalModel = "qwen2.5-coder:3b"
+  [string]$Preset = "large",
+  [string]$Fast = "",
+  [string]$Max = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -70,18 +74,15 @@ if (-not (Test-Path "$ollDest\ollama.exe")) {
 Write-Host "Installing Python deps…"
 & $py -m pip install --no-cache-dir --target "$RT\pylib" rich prompt_toolkit wcwidth pygments
 
-# ---- pull model ------------------------------------------------------------
+# ---- pull tier models ------------------------------------------------------
+# Delegated to set_models.ps1, which also writes the tier overrides into
+# data\sparky.env. Use the same tool later to swap models for a different stick.
 if (-not $NoModel) {
-  $env:OLLAMA_MODELS = "$RT\ollama\models"
-  $env:OLLAMA_HOST = "127.0.0.1:11500"
-  $ob = "$ollDest\ollama.exe"
-  if (Test-Path $ob) {
-    Write-Host "Pulling $LocalModel …"
-    $p = Start-Process -FilePath $ob -ArgumentList "serve" -PassThru -WindowStyle Hidden
-    Start-Sleep -Seconds 5
-    & $ob pull $LocalModel
-    Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
-  }
+  $smArgs = @("-Mount", $Root, "-Preset", $Preset)
+  if ($Fast) { $smArgs += @("-Fast", $Fast) }
+  if ($Max)  { $smArgs += @("-Max",  $Max) }
+  Write-Host "Pulling tier models (preset=$Preset) into the stick …"
+  & powershell -ExecutionPolicy Bypass -File "$Root\tools\set_models.ps1" @smArgs
 }
 
 Write-Host "Done. Double-click START.bat on the stick to launch Sparky."
