@@ -1,0 +1,74 @@
+name: Suggest a model
+description: An open-weight model that should be in the catalog the wizard picks from.
+labels: [model]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The catalog is short on purpose. Every entry is a model the wizard may
+        put on someone's stick, so it has to run on an ordinary laptop with no
+        GPU and do its job well there. One measured run on a real computer
+        tells us more than a benchmark table.
+
+        You can try any model before suggesting it: `sparky.cmd models add`
+        takes an Ollama tag or an `hf.co/...` name, whether or not it is in
+        the catalog.
+
+  - type: input
+    id: tag
+    attributes:
+      label: Ollama tag or Hugging Face name
+      description: Exactly as you would pass it to `sparky.cmd models add`. Check that it exists at https://ollama.com/library or on Hugging Face.
+      placeholder: gemma3:4b
+    validations:
+      required: true
+
+  - type: dropdown
+    id: purpose
+    attributes:
+      label: What it is for
+      multiple: true
+      options:
+        - everyday (general questions and chat)
+        - code (the coding agent)
+        - write (drafting and editing)
+        - study (answering from your own documents)
+        - vision (reading images)
+        - translate
+        - reason (maths, logic and planning, worked through step by step)
+    validations:
+      required: true
+
+  - type: input
+    id: size
+    attributes:
+      label: Download size
+      description: As `sparky.cmd models` shows it after adding, or as the library page lists it.
+      placeholder: 3.3 GB
+    validations:
+      required: true
+
+  - type: input
+    id: licence
+    attributes:
+      label: Licence
+      description: From the model card, named the way the card names it. Add a link if it is the model's own licence rather than a standard one.
+      placeholder: Apache 2.0
+    validations:
+      required: true
+
+  - type: textarea
+    id: run
+    attributes:
+      label: How it ran on your machine
+      description: The computer (CPU, RAM, OS, and the GPU if it has one), the speed Sparky reported, how much memory the model server used while answering, and what you asked it. Paste an answer if it makes the point. The wizard never picks a model that only runs well with a GPU, so a run on a computer without one counts most.
+    validations:
+      required: true
+
+  - type: textarea
+    id: why
+    attributes:
+      label: Why this one
+      description: What it does better than the models already in the catalog for that purpose, or the gap it fills.
+    validations:
+      required: true

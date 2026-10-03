@@ -1,0 +1,13 @@
+# Blank issues are off so that every report arrives with the version and the
+# computer it happened on.
+blank_issues_enabled: false
+contact_links:
+  - name: Security report
+    url: https://github.com/danieltyukov/portable-copilot/blob/main/SECURITY.md
+    about: How to report a vulnerability privately. Do not open a public issue for one.
+  - name: How it works
+    url: https://github.com/danieltyukov/portable-copilot/blob/main/docs/ARCHITECTURE.md
+    about: The launcher, the runtime on the stick, the model manager and the turn loop.
+  - name: Building and running it yourself
+    url: https://github.com/danieltyukov/portable-copilot/blob/main/CONTRIBUTING.md
+    about: The layout, the tests, running from a checkout, and adding a model to the catalog.

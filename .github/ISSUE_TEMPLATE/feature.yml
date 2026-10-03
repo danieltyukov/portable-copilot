@@ -1,0 +1,53 @@
+name: Feature request
+description: Something Sparky should do and does not.
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        A short list of non-goals, so a no comes early: Sparky will not add a
+        server, an account or telemetry, will not send your conversations to a
+        hosted model, and will not run a shell command without asking unless
+        you have turned that off. Everything else is open.
+
+        To suggest a model for the catalog, use the model form instead.
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      multiple: true
+      options:
+        - Models and the catalog
+        - The setup wizard
+        - Chat in the terminal
+        - Chat in the browser
+        - Modes (chat, code, write, study)
+        - ask and serve
+        - Launching and portability (operating systems, filesystems, older computers)
+        - The project site
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: The situation
+      description: What you were trying to do, and where Sparky got in the way or fell short. Describe the moment rather than the feature.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you would like it to do
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What you tried instead
+      description: Including another model, another mode, or putting files in `context/`, which covers more than it looks.
+    validations:
+      required: false

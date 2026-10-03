@@ -1,0 +1,75 @@
+name: Bug report
+description: Something behaves differently from how it is documented.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        If this is a security problem, do not open an issue. Use the Security
+        tab and "Report a vulnerability" instead, as described in SECURITY.md.
+
+        Think twice before pasting a conversation or a file from `context/`.
+        A few lines with anything private taken out are enough for almost any
+        report.
+
+  - type: dropdown
+    id: part
+    attributes:
+      label: Which part
+      multiple: true
+      options:
+        - Launching (sparky.cmd, START.bat, start.sh, start.command)
+        - Setup (setup.sh, setup.bat, the wizard)
+        - Chat in the terminal
+        - Chat in the browser (sparky.cmd web)
+        - ask or serve
+        - Models (add, remove, recommend, switching, fallback)
+        - doctor
+        - The project site
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: "The version `sparky.cmd doctor` prints, or the commit SHA."
+      placeholder: 0.4.0
+    validations:
+      required: true
+
+  - type: input
+    id: environment
+    attributes:
+      label: Computer and stick
+      description: OS and version, CPU, RAM, the stick's filesystem (exFAT, FAT32, NTFS, APFS) and the model in use.
+      placeholder: Windows 11, Ryzen 5 5500U, 16 GB, exFAT, gemma3:4b
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Plug the stick into a Mac and double-click start.command
+        2. Switch to the code mode and ask it to fix a failing test
+        3. The approval prompt shows ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected, and what happened instead
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Output, if any
+      description: "`sparky.cmd doctor` output, the error on screen, or the last lines of `data/ollama.log` on the stick."
+      render: text
+    validations:
+      required: false
