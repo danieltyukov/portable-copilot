@@ -1,10 +1,13 @@
-# Portable runtime + per-drive state — never committed (weights, keys, sessions)
+# The runtime, models and per-stick state are never committed
 runtime/
 data/
 *.pyc
 __pycache__/
 .DS_Store
 
-# Personal context dropped per-drive — never commit it (keep only the seed)
+# Personal files dropped into context/ are never committed (only the seed is)
 context/*
 !context/README.txt
+
+# Setup download cache (safe to delete)
+.cache/

@@ -3,57 +3,70 @@ from sparky import config
 
 def test_defaults_when_no_env_file(tmp_path):
     cfg = config.load(root=tmp_path)
-    assert cfg.fast_model == config.DEFAULT_FAST_MODEL
-    assert cfg.max_model == config.DEFAULT_MAX_MODEL
-    assert cfg.tier == config.DEFAULT_TIER == "max"
-    assert cfg.model == config.DEFAULT_MAX_MODEL  # default tier resolves to max
-    assert cfg.yolo is False
+    assert cfg.model == ""            # choose from what is installed
+    assert cfg.mode == "chat"
+    assert cfg.ctx == 0 and cfg.think is False and cfg.yolo is False
     assert cfg.context_dir == tmp_path / "context"
+    assert cfg.models_dir == tmp_path / "runtime" / "ollama" / "models"
+    assert cfg.ollama_host == config.DEFAULT_OLLAMA_HOST
 
 
-def test_tiers_and_model_for_tier(tmp_path):
+def test_reads_env_file_with_inline_comments(tmp_path):
+    (tmp_path / "data").mkdir()
+    (tmp_path / "data" / "sparky.env").write_text(
+        "SPARKY_MODEL=gemma3:4b   # what to open with\nSPARKY_MODE=code\nSPARKY_CTX=12000\n"
+        "SPARKY_THINK=1\nSPARKY_YOLO=yes\n")
     cfg = config.load(root=tmp_path)
-    assert cfg.tiers == [("fast", cfg.fast_model), ("max", cfg.max_model)]
-    assert cfg.model_for_tier("fast") == cfg.fast_model
-    assert cfg.model_for_tier("max") == cfg.max_model
-    # aliases resolve through model_for_tier too
-    assert cfg.model_for_tier("haiku") == cfg.fast_model
-    assert cfg.model_for_tier("opus") == cfg.max_model
+    assert cfg.model == "gemma3:4b"
+    assert cfg.mode == "code"
+    assert cfg.ctx == 12000
+    assert cfg.think is True and cfg.yolo is True
 
 
-def test_normalize_tier_aliases():
-    assert config.normalize_tier("haiku") == "fast"
-    assert config.normalize_tier("sonnet") == "max"
-    assert config.normalize_tier("opus") == "max"
-    assert config.normalize_tier("FAST") == "fast"
-    assert config.normalize_tier("bogus", default="fast") == "fast"
-    assert config.normalize_tier(None) == config.DEFAULT_TIER
+def test_environment_beats_the_file(tmp_path, monkeypatch):
+    (tmp_path / "data").mkdir()
+    (tmp_path / "data" / "sparky.env").write_text("SPARKY_MODEL=a:1b\n")
+    monkeypatch.setenv("SPARKY_MODEL", "b:2b")
+    assert config.load(root=tmp_path).model == "b:2b"
 
 
-def test_reads_env_file(tmp_path):
-    # swapping models for a different-size stick is just env overrides
-    data = tmp_path / "data"
-    data.mkdir()
-    (data / "sparky.env").write_text(
-        "SPARKY_FAST_MODEL=qwen3.5:2b\nSPARKY_MAX_MODEL=qwen3.6:27b\nSPARKY_TIER=fast\nSPARKY_YOLO=1\n"
-    )
+def test_legacy_tier_settings_still_work(tmp_path):
+    # sticks set up before 0.4 used fast/max tiers
+    (tmp_path / "data").mkdir()
+    env = tmp_path / "data" / "sparky.env"
+    env.write_text("SPARKY_FAST_MODEL=qwen3.5:4b\nSPARKY_MAX_MODEL=qwen3-coder:30b\n")
     cfg = config.load(root=tmp_path)
-    assert cfg.fast_model == "qwen3.5:2b"
-    assert cfg.max_model == "qwen3.6:27b"
-    assert cfg.tier == "fast"
-    assert cfg.model == "qwen3.5:2b"
-    assert cfg.yolo is True
+    assert cfg.model == "qwen3-coder:30b"
+    assert (cfg.legacy_fast, cfg.legacy_max) == ("qwen3.5:4b", "qwen3-coder:30b")
+    env.write_text("SPARKY_FAST_MODEL=qwen3.5:4b\nSPARKY_MAX_MODEL=qwen3-coder:30b\nSPARKY_TIER=fast\n")
+    assert config.load(root=tmp_path).model == "qwen3.5:4b"
 
 
-def test_write_env_roundtrip(tmp_path):
+def test_unknown_mode_and_bad_ctx_fall_back(tmp_path):
+    (tmp_path / "data").mkdir()
+    (tmp_path / "data" / "sparky.env").write_text("SPARKY_MODE=painting\nSPARKY_CTX=lots\n")
     cfg = config.load(root=tmp_path)
-    config.write_env(cfg, {"SPARKY_TIER": "fast"})
+    assert cfg.mode == "chat" and cfg.ctx == 0
+
+
+def test_write_env_roundtrip_and_remove(tmp_path):
+    cfg = config.load(root=tmp_path)
+    config.write_env(cfg, {"SPARKY_MODEL": "x:1b", "SPARKY_TIER": "max"})
+    config.write_env(cfg, {"SPARKY_MODE": "write"}, remove=("SPARKY_TIER",))
+    text = cfg.env_file.read_text()
+    assert "SPARKY_TIER" not in text
     again = config.load(root=tmp_path)
-    assert again.tier == "fast"
+    assert again.model == "x:1b" and again.mode == "write"
 
 
 def test_ollama_host_gets_scheme(tmp_path, monkeypatch):
-    # launcher sets OLLAMA_HOST as bare host:port; config must add a scheme
     monkeypatch.setenv("OLLAMA_HOST", "127.0.0.1:11500")
+    assert config.load(root=tmp_path).ollama_host == "http://127.0.0.1:11500"
+
+
+def test_context_window(tmp_path):
     cfg = config.load(root=tmp_path)
-    assert cfg.ollama_host == "http://127.0.0.1:11500"
+    assert config.context_window(cfg, 8) == 8192
+    assert config.context_window(cfg, 64) == 16384
+    cfg.ctx = 4096
+    assert config.context_window(cfg, 64) == 4096

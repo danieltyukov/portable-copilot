@@ -1,6 +1,6 @@
 """Grab an image from the system clipboard, cross-platform.
 
-Lets you paste a screenshot into Sparky like Claude Code does. Uses whatever
+Lets you paste a screenshot into a conversation. Uses whatever
 clipboard tool the OS provides; returns raw image bytes + media type, or None.
   Linux  : wl-paste (Wayland) or xclip (X11)
   macOS  : pngpaste, else osascript

@@ -1,6 +1,5 @@
-Drop any files here that you want Sparky to always know about — notes, specs,
-code snippets, screenshots. Everything in this folder (text files) is auto-loaded
-into the copilot's context every time you launch it from this drive.
-
-Subfolders work too (e.g. context/CESE5040/). Large binaries (PDFs, images) are
-listed but not read as text; keep the answer-bearing text in .md/.txt/.json/etc.
+Put files here that you want Sparky to know about: notes, documents, code,
+exported chats. The text of these files is given to the model with every
+conversation, as much as fits. In Study mode Sparky can also open and search
+them, so large folders work too. Subfolders are fine. PDFs and images are
+listed by name but not read as text; save the parts that matter as .txt or .md.

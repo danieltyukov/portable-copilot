@@ -1,72 +1,103 @@
-"""Tier router — Sparky's speed/accuracy switch over the local Qwen backend.
+"""Sends each request to the active model and copes when it cannot run.
 
-Sparky is fully local. The router holds the active *tier* (`fast` or `max`),
-points the local provider at that tier's model, and serves the call. If the
-`max` model can't be loaded on this host (typically not enough RAM), it
-downgrades to `fast` for that call so the turn still completes — the local
-analogue of the old online→offline fallback.
+The router holds the active model, asks the manager what that model can do
+(only tool-capable models are offered tools; only thinking models get the
+`think` switch), and when a model fails to load on this computer (usually
+not enough memory) it retries once on the next smaller installed model, so
+the turn still finishes.
 """
 
 from __future__ import annotations
 
-from . import config as config_mod
-from .providers.base import ProviderError, Reply
+from .models import ModelManager
+from .providers.base import ModelNotFound, ProviderError, Reply
 from .providers.local import LocalProvider
 
 
 class Router:
-    def __init__(self, cfg, local: LocalProvider | None = None):
+    def __init__(self, cfg, local: LocalProvider | None = None, manager: ModelManager | None = None):
         self.cfg = cfg
+        self.manager = manager or ModelManager(cfg)
         self.local = local if local is not None else LocalProvider(cfg)
-        self.tier = config_mod.normalize_tier(getattr(cfg, "tier", None))
-        self.backend = "?"          # label of the backend that served the last call
-        self.last_fallback = False  # True when the last call downgraded max→fast
+        self.model = self.manager.default()
+        self.think = bool(getattr(cfg, "think", False))
+        self.backend = "?"            # the model that served the last call
+        self.last_fallback = False    # True when the last call fell back to a smaller model
+        self.fallback_from = ""
 
-    # ---- tier selection -------------------------------------------------
-    def set_tier(self, tier: str) -> str:
-        """Select 'fast'/'max' (aliases allowed). Returns the resolved tier."""
-        self.tier = config_mod.normalize_tier(tier, self.tier)
-        return self.tier
+    # ---- selection --------------------------------------------------------------
+    def set_model(self, name: str) -> str | None:
+        """Switch to an installed model by (forgiving) name. Returns the tag, or None."""
+        hit = self.manager.resolve(name)
+        if hit:
+            self.model = hit
+        return hit
 
-    def _model(self, tier: str) -> str:
-        return self.cfg.model_for_tier(tier)
+    def cycle(self) -> str:
+        self.model = self.manager.next_after(self.model)
+        return self.model
 
-    def _serve(self, method: str, messages, tools, system, on_text=None) -> tuple[Reply, str]:
-        """Run `method` ('chat'/'chat_stream') on the active tier; on a max
-        load failure, downgrade to fast and retry once."""
+    def supports(self, capability: str, model: str | None = None) -> bool:
+        return capability in self.manager.capabilities(model or self.model)
+
+    def _think_value(self, model: str):
+        """None leaves the model's default; otherwise on/off. gpt-oss cannot
+        switch reasoning off, only down, so it gets a level instead."""
+        if not self.supports("thinking", model):
+            return None
+        if model.startswith("gpt-oss"):
+            return "medium" if self.think else "low"
+        return bool(self.think)
+
+    # ---- serving ------------------------------------------------------------------
+    def _serve(self, method: str, messages, tools, system, **kw) -> tuple[Reply, str]:
         self.last_fallback = False
-        tier = self.tier
-        # Track whether any text streamed: if max dies mid-stream we must NOT
-        # retry on fast (it would re-render the partial text in the UI).
+        self.fallback_from = ""
+        on_text = kw.pop("on_text", None)
         streamed = {"any": False}
 
         def guard(delta):
+            # if a model dies after text has streamed, retrying elsewhere would
+            # print a second, different start to the same reply
             streamed["any"] = True
             if on_text:
                 on_text(delta)
 
-        self.local.set_model(self._model(tier))
-        try:
-            reply = self._call(method, messages, tools, system, guard)
-        except ProviderError:
-            if tier != "max" or streamed["any"]:
+        candidates = [self.model] + self.manager.smaller_than(self.model)
+        last_err: ProviderError | None = None
+        for i, model in enumerate(candidates[:2]):
+            try:
+                reply = self._call(method, model, messages, tools, system, guard, **kw)
+            except ModelNotFound:
                 raise
-            # max couldn't be served (e.g. OOM) — fall back to the fast tier.
-            self.last_fallback = True
-            self.local.set_model(self._model("fast"))
-            reply = self._call(method, messages, tools, system, guard)
-        self.backend = f"qwen:{self.local.model}" + (" (downgraded)" if self.last_fallback else "")
-        return reply, self.backend
+            except ProviderError as e:
+                if streamed["any"] or "cannot reach" in str(e):
+                    raise
+                last_err = e
+                continue
+            if i:
+                self.last_fallback = True
+                self.fallback_from = self.model
+            self.backend = model
+            return reply, model
+        raise last_err or ProviderError("no model could answer")
 
-    def _call(self, method: str, messages, tools, system, on_text):
+    def _call(self, method, model, messages, tools, system, on_text, **kw):
+        self.local.set_model(model)
+        use_tools = tools if (tools and self.supports("tools", model)) else None
+        think = self._think_value(model)
         if method == "chat_stream":
-            return self.local.chat_stream(messages, tools=tools, system=system, on_text=on_text)
-        return self.local.chat(messages, tools=tools, system=system)
+            return self.local.chat_stream(messages, tools=use_tools, system=system,
+                                          on_text=on_text, think=think, **kw)
+        return self.local.chat(messages, tools=use_tools, system=system, think=think)
 
     def chat(self, messages, tools=None, system=None) -> tuple[Reply, str]:
-        """Returns (reply, backend_label)."""
         return self._serve("chat", messages, tools, system)
 
-    def chat_stream(self, messages, tools=None, system=None, on_text=None) -> tuple[Reply, str]:
-        """Streaming variant. Returns (reply, backend_label); on_text(delta) per chunk."""
-        return self._serve("chat_stream", messages, tools, system, on_text=on_text)
+    def chat_stream(self, messages, tools=None, system=None, on_text=None, on_think=None,
+                    cancel=None) -> tuple[Reply, str]:
+        return self._serve("chat_stream", messages, tools, system, on_text=on_text,
+                           on_think=on_think, cancel=cancel)
+
+    def abort(self) -> None:
+        self.local.abort()

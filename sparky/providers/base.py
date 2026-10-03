@@ -26,19 +26,28 @@ class Reply:
     content_blocks: list[dict]      # normalized assistant blocks (text + tool_use)
     stop_reason: str | None = None
     raw: Any = None
+    thinking: str = ""              # reasoning text, when the model thinks aloud
+    stats: dict = field(default_factory=dict)   # tokens, seconds, tps
 
     @property
     def wants_tools(self) -> bool:
         return bool(self.tool_calls)
 
 
-# A ToolSpec is a plain dict: {"name", "description", "input_schema"} — the exact
-# shape the Anthropic Messages API expects, and easy to adapt for Ollama.
+# A ToolSpec is a plain dict: {"name", "description", "input_schema"}.
 ToolSpec = dict
 
 
 class ProviderError(Exception):
-    """Raised when a provider call fails (network, HTTP, auth, parse)."""
+    """A chat request failed (server down, HTTP error, bad response)."""
+
+
+class ModelNotFound(ProviderError):
+    """The requested model is not installed on this stick."""
+
+
+class Cancelled(Exception):
+    """The user stopped the reply. Not an error, so not a ProviderError."""
 
 
 def text_block(text: str) -> dict:

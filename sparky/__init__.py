@@ -1,9 +1,8 @@
-"""Sparky — a portable, zero-install, fully-local AI coding copilot.
+"""Sparky: open-weight AI from a USB stick.
 
-Runs entirely offline on local Qwen models served by a bundled Ollama. Switch
-between speed/accuracy tiers in-session (fast ↔ max) — the local analogue of
-Haiku ↔ Opus. No API key, no network, nothing leaves the machine. See README.md
-and docs/superpowers/specs/ for the full design.
+Plug the stick into any Windows, macOS or Linux computer and run sparky.cmd.
+Models run on the computer through a bundled Ollama; nothing is installed
+and nothing leaves the machine. See README.md and docs/ARCHITECTURE.md.
 """
 
-__version__ = "0.3.0"
+__version__ = "0.4.0"

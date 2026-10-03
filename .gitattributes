@@ -1,0 +1,22 @@
+# Line endings the launchers depend on, whatever the checkout's own settings
+# are. A zip downloaded from GitHub gets them too, because git archive applies
+# these rules.
+
+* text=auto
+
+# Shell scripts run on macOS and Linux, where a carriage return at the end of a
+# line breaks them.
+*.sh           text eol=lf
+start.command  text eol=lf
+
+# One file read by sh and by cmd. sh needs LF; cmd copes with it.
+sparky.cmd     text eol=lf
+
+# cmd and Windows PowerShell expect CRLF.
+*.bat          text eol=crlf
+*.ps1          text eol=crlf
+
+*.png          binary
+*.jpg          binary
+*.ico          binary
+*.woff2        binary

@@ -1,0 +1,68 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sparky-usb"
+version = "0.4.0"
+description = "Sparky, open-weight AI on a USB stick: plug into any computer, pick a model by what it is for, and run it offline."
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "danieltyukov" }]
+requires-python = ">=3.10"
+keywords = ["usb", "portable", "offline", "local", "llm", "ollama", "open-weight", "assistant"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Environment :: Web Environment",
+    "Intended Audience :: End Users/Desktop",
+    "Intended Audience :: Developers",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: MacOS",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    # Not published: PyPI refuses any upload that carries a Private classifier.
+    "Private :: Do Not Upload",
+]
+# Pure Python only: on a stick these live in runtime/pylib, one folder shared by
+# every OS. See CONTRIBUTING.md.
+dependencies = [
+    "rich>=13",
+    "prompt_toolkit>=3",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7", "ruff>=0.16"]
+
+[project.urls]
+Homepage = "https://danieltyukov.github.io/portable-copilot/"
+Source = "https://github.com/danieltyukov/portable-copilot"
+Changelog = "https://github.com/danieltyukov/portable-copilot/blob/main/CHANGELOG.md"
+Issues = "https://github.com/danieltyukov/portable-copilot/issues"
+
+[project.scripts]
+sparky = "sparky.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["sparky*"]
+
+# The browser UI's page, script, stylesheet and icon.
+[tool.setuptools.package-data]
+sparky = ["web/static/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 110
+target-version = "py310"
+
+[tool.ruff.lint]
+# Pyflakes and pycodestyle errors and warnings. Long lines are left to judgement,
+# and the code uses one-line `if x: return` and `a; b` statements on purpose.
+select = ["E", "F", "W"]
+ignore = ["E501", "E701", "E702"]

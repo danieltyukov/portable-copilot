@@ -1,11 +1,19 @@
-"""Configuration + path resolution for Sparky.
+"""Settings and paths.
 
-Everything Sparky needs lives on the stick. `data/sparky.env` holds settings;
-this module resolves the stick root and merges env-file values with process
-environment overrides.
+Everything Sparky needs lives next to the app: on the stick, or in the folder
+it was installed to. `data/sparky.env` holds the settings; process
+environment variables override it, so a launcher or a user can change one
+thing for a single run.
 
-Sparky is fully local: it runs Qwen models via a bundled Ollama and lets you
-switch between speed/accuracy *tiers* (the local analogue of Haiku ↔ Opus).
+Settings (all optional):
+    SPARKY_MODEL    the model to open with; empty means "best one installed"
+    SPARKY_MODE     chat, code, write or study
+    SPARKY_CTX      context window in tokens; 0 means "pick from this computer's memory"
+    SPARKY_THINK    1 to show the reasoning of models that think before answering
+    SPARKY_YOLO     1 to run shell commands without asking (code mode)
+
+Sticks set up before 0.4 used two "tiers"; SPARKY_FAST_MODEL, SPARKY_MAX_MODEL
+and SPARKY_TIER are still read so those sticks keep working.
 """
 
 from __future__ import annotations
@@ -14,20 +22,10 @@ import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
-# Two tiers, chosen to fit "any laptop + ~29 GB stick" (CPU inference):
-#   fast → a small, snappy model that runs anywhere.
-#   max  → a 30B a3b MoE (~3B active) — the best CPU agentic coder that fits.
-# `max` is the default so Sparky opens on the strongest model; it auto-downgrades
-# to `fast` at the router if a host can't load it (see router.py).
-DEFAULT_FAST_MODEL = "qwen3.5:4b"
-DEFAULT_MAX_MODEL = "qwen3-coder:30b"
-DEFAULT_TIER = "max"
+from . import modes
 
-# Friendly aliases so Claude-Code muscle memory keeps working with /model.
-TIER_ALIASES = {"haiku": "fast", "sonnet": "max", "opus": "max", "f": "fast", "m": "max"}
-
-# A non-default port so the bundled Ollama never collides with a system Ollama
-# that may already own 11434 on the host machine.
+# A non-default port so the bundled server never collides with an Ollama that
+# the host computer may already be running on 11434.
 DEFAULT_OLLAMA_HOST = "http://127.0.0.1:11500"
 
 
@@ -41,17 +39,12 @@ def _parse_env_file(path: Path) -> dict[str, str]:
         if not line or line.startswith("#") or "=" not in line:
             continue
         key, _, val = line.partition("=")
-        out[key.strip()] = val.strip().strip('"').strip("'")
+        out[key.strip()] = val.split(" #")[0].strip().strip('"').strip("'")
     return out
 
 
-def normalize_tier(name: str | None, default: str = DEFAULT_TIER) -> str:
-    """Resolve a user-typed tier name (incl. aliases) to 'fast' or 'max'."""
-    if not name:
-        return default
-    n = name.strip().lower()
-    n = TIER_ALIASES.get(n, n)
-    return n if n in ("fast", "max") else default
+def _truthy(value: str | None) -> bool:
+    return (value or "").strip().lower() in ("1", "true", "yes", "on")
 
 
 @dataclass
@@ -62,29 +55,23 @@ class Config:
     runtime_dir: Path
     sessions_dir: Path
     env_file: Path
-    fast_model: str
-    max_model: str
-    tier: str
+    model: str              # requested model; "" = choose from what is installed
+    mode: str
+    ctx: int                # 0 = automatic
+    think: bool
     yolo: bool
     ollama_host: str
+    legacy_fast: str = ""   # pre-0.4 tier models, used as aliases "fast" / "max"
+    legacy_max: str = ""
     env: dict = field(default_factory=dict)
 
     @property
-    def tiers(self) -> list[tuple[str, str]]:
-        """Ordered (tier_name, model) pairs — drives the Ctrl-T cycle order."""
-        return [("fast", self.fast_model), ("max", self.max_model)]
-
-    def model_for_tier(self, tier: str | None = None) -> str:
-        return self.max_model if normalize_tier(tier, self.tier) == "max" else self.fast_model
-
-    @property
-    def model(self) -> str:
-        """The model for the currently-selected tier."""
-        return self.model_for_tier(self.tier)
+    def models_dir(self) -> Path:
+        return self.runtime_dir / "ollama" / "models"
 
 
 def find_root() -> Path:
-    """The stick root = SPARKY_ROOT, else the parent of this package dir."""
+    """The install root: SPARKY_ROOT, else the folder that holds the sparky package."""
     env_root = os.environ.get("SPARKY_ROOT")
     if env_root:
         return Path(env_root).expanduser().resolve()
@@ -97,16 +84,28 @@ def load(root: Path | str | None = None) -> Config:
     env_file = data_dir / "sparky.env"
     file_env = _parse_env_file(env_file)
 
-    def pick(key: str, default: str | None = None) -> str | None:
-        # process env wins over the on-stick env file
+    def pick(key: str, default: str = "") -> str:
+        # the process environment wins over the file on the stick
         return os.environ.get(key) or file_env.get(key) or default
 
-    yolo_raw = pick("SPARKY_YOLO", "0") or "0"
-    # OLLAMA_HOST is set by the launcher in ollama's own "host:port" form (no
-    # scheme); our stdlib HTTP client needs a full URL, so normalize it.
-    ollama_host = pick("OLLAMA_HOST", DEFAULT_OLLAMA_HOST) or DEFAULT_OLLAMA_HOST
-    if not ollama_host.startswith(("http://", "https://")):
-        ollama_host = "http://" + ollama_host
+    legacy_fast = pick("SPARKY_FAST_MODEL")
+    legacy_max = pick("SPARKY_MAX_MODEL")
+    model = pick("SPARKY_MODEL")
+    if not model and (legacy_fast or legacy_max):
+        model = legacy_fast if pick("SPARKY_TIER").lower() in ("fast", "haiku") else legacy_max
+        model = model or legacy_fast or legacy_max
+
+    try:
+        ctx = max(int(pick("SPARKY_CTX", "0")), 0)
+    except ValueError:
+        ctx = 0
+
+    # The launcher sets OLLAMA_HOST in Ollama's own "host:port" form; the HTTP
+    # client needs a full URL.
+    host = pick("OLLAMA_HOST", DEFAULT_OLLAMA_HOST)
+    if not host.startswith(("http://", "https://")):
+        host = "http://" + host
+
     return Config(
         root=root,
         data_dir=data_dir,
@@ -114,24 +113,39 @@ def load(root: Path | str | None = None) -> Config:
         runtime_dir=root / "runtime",
         sessions_dir=data_dir / "sessions",
         env_file=env_file,
-        fast_model=pick("SPARKY_FAST_MODEL", DEFAULT_FAST_MODEL) or DEFAULT_FAST_MODEL,
-        max_model=pick("SPARKY_MAX_MODEL", DEFAULT_MAX_MODEL) or DEFAULT_MAX_MODEL,
-        tier=normalize_tier(pick("SPARKY_TIER", DEFAULT_TIER)),
-        yolo=yolo_raw.lower() in ("1", "true", "yes", "on"),
-        ollama_host=ollama_host,
+        model=model,
+        mode=modes.resolve(pick("SPARKY_MODE")) or modes.DEFAULT_MODE,
+        ctx=ctx,
+        think=_truthy(pick("SPARKY_THINK")),
+        yolo=_truthy(pick("SPARKY_YOLO")),
+        ollama_host=host,
+        legacy_fast=legacy_fast,
+        legacy_max=legacy_max,
         env=file_env,
     )
 
 
-def write_env(cfg: Config, updates: dict[str, str]) -> None:
-    """Merge updates into data/sparky.env and chmod 600. Creates data/ if needed."""
+def write_env(cfg: Config, updates: dict[str, str], remove: tuple[str, ...] = ()) -> None:
+    """Merge updates into data/sparky.env (creating it), dropping `remove` keys."""
     cfg.data_dir.mkdir(parents=True, exist_ok=True)
-    merged = dict(_parse_env_file(cfg.env_file))
+    merged = {k: v for k, v in _parse_env_file(cfg.env_file).items() if k not in remove}
     merged.update(updates)
-    lines = ["# Sparky settings — fully local, no API keys needed."]
+    lines = ["# Sparky settings. Everything runs on this computer; there are no keys to add."]
     lines += [f"{k}={v}" for k, v in merged.items()]
     cfg.env_file.write_text("\n".join(lines) + "\n", encoding="utf-8")
     try:
         os.chmod(cfg.env_file, 0o600)
     except OSError:
         pass
+    cfg.env.update(updates)
+
+
+def context_window(cfg: Config, ram_gb: float) -> int:
+    """Tokens of context to ask the server for. Ollama's own default is small
+    (4096 on a CPU), which silently cuts off long conversations and the
+    context folder, so Sparky always sets it."""
+    if cfg.ctx:
+        return cfg.ctx
+    if ram_gb >= 24:
+        return 16384
+    return 8192

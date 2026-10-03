@@ -1,5 +1,8 @@
-"""Agent tools — filesystem + shell, the surface that makes Sparky a coding
-copilot rather than a chatbot. Specs are in Anthropic tool schema shape.
+"""Agent tools: files and the shell, offered in the modes that need them.
+
+Specs are in Anthropic tool-schema shape. Anything that could do harm asks
+first through `confirm(description) -> bool`: every shell command, and any
+write or edit outside the folder Sparky was started in.
 """
 
 from __future__ import annotations
@@ -28,7 +31,7 @@ TOOL_SPECS: list[dict] = [
         "input_schema": {
             "type": "object",
             "properties": {
-                "path": {"type": "string"},
+                "path": {"type": "string", "description": "File path, relative to the working directory."},
                 "content": {"type": "string"},
             },
             "required": ["path", "content"],
@@ -40,7 +43,7 @@ TOOL_SPECS: list[dict] = [
         "input_schema": {
             "type": "object",
             "properties": {
-                "path": {"type": "string"},
+                "path": {"type": "string", "description": "File path, relative to the working directory."},
                 "old_str": {"type": "string"},
                 "new_str": {"type": "string"},
             },
@@ -85,26 +88,55 @@ def _resolve(cwd: Path, path: str) -> Path:
     return p if p.is_absolute() else (cwd / p)
 
 
+def _resolve_existing(cwd: Path, path: str) -> Path:
+    """For reading: small models often invent an absolute path ("/notes.txt")
+    for a file in the working folder. When that path does not exist and the
+    folder has a file of that name, read that instead."""
+    p = _resolve(cwd, path)
+    # .anchor, not is_absolute(): on Windows "/notes.txt" has a root but no drive
+    if not p.exists() and Path(path).anchor and (cwd / p.name).exists():
+        return cwd / p.name
+    return p
+
+
 def _truncate(s: str, limit: int = MAX_OUTPUT) -> str:
-    return s if len(s) <= limit else s[:limit] + f"\n…[truncated, {len(s)} bytes total]"
+    return s if len(s) <= limit else s[:limit] + f"\n[...cut, {len(s)} characters in total]"
+
+
+def _inside(cwd: Path, p: Path) -> bool:
+    try:
+        p.resolve().relative_to(cwd.resolve())
+        return True
+    except ValueError:
+        return False
+
+
+def _allowed_write(cwd: Path, p: Path, confirm, verb: str) -> bool:
+    if _inside(cwd, p) or confirm is None:
+        return True
+    return bool(confirm(f"{verb} {p} (outside the working folder {cwd})"))
 
 
 def run_tool(name: str, args: dict, *, cwd: Path, confirm=None) -> str:
-    """Dispatch a tool call. `confirm(command) -> bool` gates run_shell."""
+    """Dispatch a tool call. `confirm(description) -> bool` gates anything risky."""
     try:
         if name == "read_file":
-            p = _resolve(cwd, args["path"])
+            p = _resolve_existing(cwd, args["path"])
             data = p.read_bytes()[:MAX_READ_BYTES]
             return _truncate(data.decode("utf-8", "replace"))
 
         if name == "write_file":
             p = _resolve(cwd, args["path"])
+            if not _allowed_write(cwd, p, confirm, "write"):
+                return "The user did not allow writing outside the working folder."
             p.parent.mkdir(parents=True, exist_ok=True)
             p.write_text(args["content"], encoding="utf-8")
             return f"Wrote {len(args['content'])} bytes to {p}"
 
         if name == "edit_file":
             p = _resolve(cwd, args["path"])
+            if not _allowed_write(cwd, p, confirm, "edit"):
+                return "The user did not allow editing outside the working folder."
             text = p.read_text(encoding="utf-8")
             old = args["old_str"]
             count = text.count(old)
@@ -131,7 +163,8 @@ def run_tool(name: str, args: dict, *, cwd: Path, confirm=None) -> str:
                 return f"Error: bad regex: {e}"
             hits: list[str] = []
             for root, dirs, files in os.walk(base):
-                dirs[:] = [d for d in dirs if d not in {".git", "node_modules", "__pycache__", "runtime"}]
+                dirs[:] = [d for d in dirs if d not in {".git", "node_modules", "__pycache__", "runtime",
+                                                        ".venv", "venv", ".cache"}]
                 for fn in files:
                     fp = Path(root) / fn
                     try:
@@ -139,15 +172,15 @@ def run_tool(name: str, args: dict, *, cwd: Path, confirm=None) -> str:
                             if rx.search(line):
                                 hits.append(f"{fp}:{i}: {line.strip()}")
                                 if len(hits) >= 200:
-                                    return _truncate("\n".join(hits) + "\n…[200-match cap]")
+                                    return _truncate("\n".join(hits) + "\n[...stopped at 200 matches]")
                     except (UnicodeDecodeError, OSError):
                         continue
             return _truncate("\n".join(hits)) if hits else "No matches."
 
         if name == "run_shell":
             cmd = args["command"]
-            if confirm is not None and not confirm(cmd):
-                return "Command was not approved by the user."
+            if confirm is not None and not confirm(f"run: {cmd}"):
+                return "The user did not approve this command."
             proc = subprocess.run(
                 cmd, shell=True, cwd=str(cwd), capture_output=True, text=True, timeout=120,
             )

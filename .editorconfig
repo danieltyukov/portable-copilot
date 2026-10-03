@@ -1,0 +1,25 @@
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 2
+
+[*.py]
+indent_size = 4
+
+[*.md]
+trim_trailing_whitespace = false
+
+# cmd and Windows PowerShell expect CRLF. .gitattributes enforces the same on
+# checkout; this keeps an editor from undoing it.
+[*.{bat,ps1}]
+end_of_line = crlf
+
+# sparky.cmd is read by sh as well as by cmd, and a carriage return at the end
+# of a line breaks the shell half. cmd copes with LF.
+[sparky.cmd]
+end_of_line = lf

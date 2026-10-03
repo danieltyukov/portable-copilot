@@ -1,5 +1,5 @@
 :; # =====================================================================
-:; # Sparky — ONE universal launcher for Linux, macOS, and Windows.
+:; # Sparky: one launcher for Linux, macOS and Windows.
 :; #   macOS / Linux :   ./sparky.cmd
 :; #   Windows       :   sparky.cmd   (or double-click)
 :; # This file is a polyglot: a POSIX shell script AND a Windows batch file.

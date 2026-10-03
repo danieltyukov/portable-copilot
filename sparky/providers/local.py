@@ -1,33 +1,54 @@
-"""Local provider — talks to a bundled Ollama serving Qwen, over stdlib HTTP.
+"""Chat with the bundled Ollama server over stdlib HTTP.
 
 Translates the normalized Anthropic-style message/block schema into Ollama's
-OpenAI-ish /api/chat format and back. Images are dropped with a note (the coder
-model is text-only).
+/api/chat format and back, streams the reply, and reports token statistics.
 """
 
 from __future__ import annotations
 
 import json
+import socket
+import threading
 import urllib.error
 import urllib.request
 
-from .base import ProviderError, Reply, ToolCall
+from .base import Cancelled, ModelNotFound, ProviderError, Reply, ToolCall
 
 MAX_PREDICT = 2048
 
 
 class LocalProvider:
-    def __init__(self, cfg, model: str | None = None):
+    def __init__(self, cfg, model: str | None = None, ctx: int = 8192):
         self.cfg = cfg
         self.model = model or cfg.model
         self.host = cfg.ollama_host.rstrip("/")
+        self.ctx = ctx
+        self._active = None   # the response being streamed, so abort() can close it
 
     def set_model(self, model: str) -> None:
-        """Point this provider at a different Ollama model (used for tier switches)."""
         self.model = model
 
+    def abort(self) -> None:
+        """Stop the reply in progress from another thread. A blocked read (the
+        model still loading, say) only notices a cancel flag when the next
+        chunk arrives; closing the socket ends the wait at once."""
+        resp = self._active
+        if resp is None:
+            return
+        # close() alone does not wake a read already blocked in recv();
+        # shutting the socket down does, on every OS
+        try:
+            resp.fp.raw._sock.shutdown(socket.SHUT_RDWR)
+        except Exception:
+            pass
+        try:
+            resp.close()
+        except Exception:
+            pass
+
     # ---- payload construction (pure; unit-tested) -----------------------
-    def build_payload(self, messages: list[dict], tools, system: str | None) -> dict:
+    def build_payload(self, messages: list[dict], tools, system: str | None,
+                      think: bool | str | None = None) -> dict:
         ollama_messages: list[dict] = []
         if system:
             ollama_messages.append({"role": "system", "content": system})
@@ -37,10 +58,12 @@ class LocalProvider:
             "model": self.model,
             "messages": ollama_messages,
             "stream": False,
-            "options": {"num_predict": MAX_PREDICT},
+            "options": {"num_predict": MAX_PREDICT, "num_ctx": self.ctx},
         }
         if tools:
             payload["tools"] = [self._tool_to_ollama(t) for t in tools]
+        if think is not None:
+            payload["think"] = think
         return payload
 
     @staticmethod
@@ -71,8 +94,7 @@ class LocalProvider:
             if btype == "text":
                 texts.append(block.get("text", ""))
             elif btype == "image":
-                # Pass to Ollama's `images` field — used if the local model has
-                # vision (e.g. a qwen-vl); text-only models ignore it.
+                # Ollama's `images` field; vision models read it, others ignore it.
                 src = block.get("source", {}) or {}
                 if src.get("data"):
                     images.append(src["data"])
@@ -81,7 +103,6 @@ class LocalProvider:
                     "function": {"name": block.get("name", ""), "arguments": block.get("input", {})}
                 })
             elif btype == "tool_result":
-                # tool results become a dedicated Ollama "tool" message
                 tc = block.get("content", "")
                 if isinstance(tc, list):
                     tc = "".join(p.get("text", "") for p in tc if isinstance(p, dict))
@@ -99,74 +120,85 @@ class LocalProvider:
         return out
 
     # ---- network --------------------------------------------------------
-    def reachable(self, timeout: float = 2.0) -> bool:
-        try:
-            req = urllib.request.Request(f"{self.host}/api/tags")
-            with urllib.request.urlopen(req, timeout=timeout):
-                return True
-        except OSError:
-            return False
-
-    def chat(self, messages: list[dict], tools=None, system: str | None = None) -> Reply:
-        payload = self.build_payload(messages, tools, system)
-        data = json.dumps(payload).encode("utf-8")
+    def _open(self, payload: dict):
         req = urllib.request.Request(
-            f"{self.host}/api/chat", data=data, method="POST",
+            f"{self.host}/api/chat", data=json.dumps(payload).encode("utf-8"), method="POST",
             headers={"content-type": "application/json"},
         )
         try:
-            with urllib.request.urlopen(req, timeout=600) as resp:
-                body = json.loads(resp.read().decode("utf-8"))
+            # Loading a big model from a slow stick can take minutes before the
+            # first token; the timeout is per read, so it only fires on a stall.
+            return urllib.request.urlopen(req, timeout=900)
         except urllib.error.HTTPError as e:
-            detail = e.read().decode("utf-8", "replace")[:300]
-            raise ProviderError(f"Ollama HTTP {e.code}: {detail}") from e
-        except (urllib.error.URLError, OSError, TimeoutError) as e:
-            raise ProviderError(f"Ollama connection error: {e}") from e
+            raise _http_error(e, self.model) from e
+        except (urllib.error.URLError, OSError) as e:
+            raise ProviderError(f"cannot reach the model server ({e})") from e
+
+    def chat(self, messages: list[dict], tools=None, system: str | None = None,
+             think: bool | str | None = None) -> Reply:
+        payload = self.build_payload(messages, tools, system, think)
+        try:
+            with self._open(payload) as resp:
+                body = json.loads(resp.read().decode("utf-8"))
+        except (OSError, json.JSONDecodeError) as e:
+            raise ProviderError(f"model server error ({e})") from e
         tool_names = [t["name"] for t in tools] if tools else []
         return self._parse(body, tool_names)
 
     def chat_stream(self, messages: list[dict], tools=None, system: str | None = None,
-                    on_text=None) -> Reply:
-        """Stream Ollama /api/chat (NDJSON). Calls on_text(delta) per chunk."""
-        payload = self.build_payload(messages, tools, system)
+                    on_text=None, on_think=None, think: bool | str | None = None,
+                    cancel: threading.Event | None = None) -> Reply:
+        """Stream /api/chat (NDJSON). on_text/on_think get each chunk.
+        Setting `cancel` stops the reply and raises Cancelled; closing the
+        connection also stops the server generating."""
+        payload = self.build_payload(messages, tools, system, think)
         payload["stream"] = True
-        data = json.dumps(payload).encode("utf-8")
-        req = urllib.request.Request(
-            f"{self.host}/api/chat", data=data, method="POST",
-            headers={"content-type": "application/json"},
-        )
         texts: list[str] = []
+        thoughts: list[str] = []
         raw_tool_calls: list[dict] = []
-        done_reason = None
+        final: dict = {}
+        resp = self._active = self._open(payload)
         try:
-            with urllib.request.urlopen(req, timeout=600) as resp:
-                for raw in resp:
-                    line = raw.decode("utf-8", "replace").strip()
-                    if not line:
-                        continue
-                    try:
-                        ev = json.loads(line)
-                    except json.JSONDecodeError:
-                        continue
-                    msg = ev.get("message", {}) or {}
-                    t = msg.get("content", "")
-                    if t:
-                        texts.append(t)
-                        if on_text:
-                            on_text(t)
-                    if msg.get("tool_calls"):
-                        raw_tool_calls.extend(msg["tool_calls"])
-                    if ev.get("done"):
-                        done_reason = ev.get("done_reason", done_reason)
-        except urllib.error.HTTPError as e:
-            detail = e.read().decode("utf-8", "replace")[:300]
-            raise ProviderError(f"Ollama HTTP {e.code}: {detail}") from e
-        except (urllib.error.URLError, OSError, TimeoutError) as e:
-            raise ProviderError(f"Ollama connection error: {e}") from e
+            for raw in resp:
+                if cancel is not None and cancel.is_set():
+                    raise Cancelled()
+                line = raw.decode("utf-8", "replace").strip()
+                if not line:
+                    continue
+                try:
+                    ev = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if ev.get("error"):
+                    raise ProviderError(str(ev["error"]))
+                msg = ev.get("message", {}) or {}
+                if msg.get("thinking"):
+                    thoughts.append(msg["thinking"])
+                    if on_think:
+                        on_think(msg["thinking"])
+                if msg.get("content"):
+                    texts.append(msg["content"])
+                    if on_text:
+                        on_text(msg["content"])
+                if msg.get("tool_calls"):
+                    raw_tool_calls.extend(msg["tool_calls"])
+                if ev.get("done"):
+                    final = ev
+        except (OSError, ValueError, AttributeError) as e:
+            if cancel is not None and cancel.is_set():
+                raise Cancelled() from e
+            raise ProviderError(f"the model server stopped mid-reply ({e})") from e
+        finally:
+            self._active = None
+            resp.close()
+        if cancel is not None and cancel.is_set():
+            raise Cancelled()
         body = {"message": {"content": "".join(texts), "tool_calls": raw_tool_calls},
-                "done_reason": done_reason}
+                **{k: v for k, v in final.items() if k != "message"}}
         tool_names = [t["name"] for t in tools] if tools else []
-        return self._parse(body, tool_names)
+        reply = self._parse(body, tool_names)
+        reply.thinking = "".join(thoughts)
+        return reply
 
     @staticmethod
     def _parse(body: dict, tool_names=()) -> Reply:
@@ -181,14 +213,12 @@ class LocalProvider:
                     args = json.loads(args)
                 except json.JSONDecodeError:
                     args = {}
-            tc = ToolCall(id=f"call_{i}", name=fn.get("name", ""), input=args or {})
-            tool_calls.append(tc)
+            tool_calls.append(ToolCall(id=f"call_{i}", name=fn.get("name", ""), input=args or {}))
 
-        # Fallback: small models (e.g. qwen2.5-coder:3b) often emit the tool call
-        # as a JSON blob in the text instead of structured tool_calls. Recover it.
+        # Small models often write the tool call as JSON in their text instead
+        # of using structured tool_calls. Recover it.
         if not tool_calls and tool_names:
-            extracted, text = extract_text_tool_calls(text, tool_names)
-            tool_calls = extracted
+            tool_calls, text = extract_text_tool_calls(text, tool_names)
 
         norm_blocks: list[dict] = []
         if text:
@@ -203,20 +233,34 @@ class LocalProvider:
             content_blocks=norm_blocks,
             stop_reason=body.get("done_reason"),
             raw=body,
+            stats=stats_from(body),
         )
 
-    def ensure_model(self) -> None:
-        """Best-effort: trigger a pull if the model isn't present. Non-fatal."""
-        try:
-            data = json.dumps({"name": self.model}).encode("utf-8")
-            req = urllib.request.Request(
-                f"{self.host}/api/show", data=data, method="POST",
-                headers={"content-type": "application/json"},
-            )
-            with urllib.request.urlopen(req, timeout=5):
-                return
-        except OSError:
-            return
+
+def stats_from(body: dict) -> dict:
+    """Token counts and speed from the server's final chunk (durations in ns)."""
+    tokens = int(body.get("eval_count") or 0)
+    secs = (body.get("eval_duration") or 0) / 1e9
+    if not tokens:
+        return {}
+    return {
+        "tokens": tokens,
+        "prompt_tokens": int(body.get("prompt_eval_count") or 0),
+        "seconds": round(secs, 2),
+        "tps": round(tokens / secs, 1) if secs else 0.0,
+    }
+
+
+def _http_error(e: urllib.error.HTTPError, model: str) -> ProviderError:
+    detail = e.read().decode("utf-8", "replace")
+    try:
+        detail = json.loads(detail).get("error", detail)
+    except (json.JSONDecodeError, AttributeError):
+        pass
+    detail = str(detail)[:300]
+    if e.code == 404 or "not found" in detail.lower():
+        return ModelNotFound(f"{model} is not on this stick")
+    return ProviderError(f"model server error {e.code}: {detail}")
 
 
 def extract_text_tool_calls(text: str, tool_names) -> tuple[list[ToolCall], str]:
@@ -259,7 +303,6 @@ def extract_text_tool_calls(text: str, tool_names) -> tuple[list[ToolCall], str]
         i = end
     if not calls:
         return [], text
-    # strip the matched JSON (and surrounding ``` / <tool_call> wrappers) from text
     cleaned = text
     for start, end in reversed(spans):
         cleaned = cleaned[:start] + cleaned[end:]

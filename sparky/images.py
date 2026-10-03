@@ -1,4 +1,4 @@
-"""Image handling — detect image paths in a prompt and base64-encode them into
+"""Image handling: detect image paths in a prompt and base64-encode them into
 normalized Anthropic image blocks. Uses only stdlib (no Pillow), so it stays
 pure-Python and cross-OS.
 """

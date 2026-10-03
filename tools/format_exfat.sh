@@ -1,17 +1,16 @@
 #!/usr/bin/env bash
-# Convert the Sparky USB to exFAT (Linux) — needed so the bundled local model
-# can run OFFLINE.
+# Convert the Sparky USB to exFAT (Linux), so the bundled model server can run.
 #
 # Why: a FAT/vfat stick mounts with `showexec`, which marks non-.exe files
 # non-executable, so Ollama can't launch its `llama-server` inference binary.
 # exFAT is cross-platform (Windows/macOS/Linux), supports files >4GB, and mounts
-# executable on Linux — so the local model runs. Sparky is fully local, so this
+# executable on Linux, so the model server runs. Sparky is fully local, so this
 # is required on Linux for it to work at all.
 #
 #   sudo tools/format_exfat.sh [--device /dev/sdX] [--mount <dir>] [--yes]
 #
 # DESTRUCTIVE: wipes the whole device. The script stages the current Sparky
-# contents to your home dir, reformats, and restores them — but the device must
+# contents to your home dir, reformats, and restores them, but the device must
 # NOT be in use (close file managers, terminals cd'd into it, and any running
 # Sparky/Ollama, then unplug-replug if needed).
 set -euo pipefail
@@ -77,5 +76,5 @@ mount "$PART" "$NEWMNT" 2>/dev/null || mount -o uid="$(id -u "$USER_NAME")",gid=
 cp -a "$STAGE"/. "$NEWMNT"/
 sync
 echo
-echo "Done — $NEWMNT is now exFAT. Offline mode will work. (Stage kept at $STAGE; delete when happy.)"
+echo "Done. $NEWMNT is now exFAT and Sparky can run from it. (The copy in $STAGE can be deleted.)"
 echo "Launch:  cd '$NEWMNT' && ./sparky.cmd"

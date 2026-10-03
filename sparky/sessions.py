@@ -1,4 +1,4 @@
-"""Conversation persistence + resume (parity with OpenClaude's session resume).
+"""Saved conversations, so one can be picked up again (/resume, --resume).
 
 Each session is one JSON file in data/sessions/. Image data is stripped on save
 (replaced with a marker) so files stay small; resumed sessions keep the text.
@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import json
 import time
-from pathlib import Path
 
 
 def _title(history: list[dict]) -> str:
