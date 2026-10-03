@@ -34,9 +34,24 @@ def _run_text(cmd: list[str]) -> str:
         return ""
 
 
+def _system() -> str:
+    """windows, macos or linux. One place to ask, so tests can pretend to be
+    another OS without changing os.name for the whole process."""
+    if os.name == "nt":
+        return "windows"
+    if sys.platform == "darwin":
+        return "macos"
+    return "linux"
+
+
 def grab_image() -> tuple[bytes, str] | None:
     """Return (image_bytes, media_type) from the clipboard, or None."""
-    # ----- Linux: Wayland -----
+    system = _system()
+    if system == "windows":
+        return _grab_windows()
+    if system == "macos":
+        return _grab_macos()
+    # ----- Linux (and other Unix): Wayland -----
     if os.environ.get("WAYLAND_DISPLAY") and shutil.which("wl-paste"):
         types = _run_text(["wl-paste", "--list-types"])
         for mt in _IMG_TYPES:
@@ -50,23 +65,21 @@ def grab_image() -> tuple[bytes, str] | None:
             data = _run(["xclip", "-selection", "clipboard", "-t", mt, "-o"])
             if data and len(data) > 8:
                 return data, mt
-    # ----- macOS -----
-    if sys.platform == "darwin":
-        if shutil.which("pngpaste"):
-            data = _run(["pngpaste", "-"])
-            if data:
-                return data, "image/png"
-        tmp = _fresh_tmp()
-        script = (
-            'try\nset f to (open for access POSIX file "%s" with write permission)\n'
-            "write (the clipboard as «class PNGf») to f\nclose access f\nend try" % tmp
-        )
-        _run_text(["osascript", "-e", script])
-        return _read_tmp(tmp, "image/png")
-    # ----- Windows -----
-    if os.name == "nt":
-        return _grab_windows()
     return None
+
+
+def _grab_macos() -> tuple[bytes, str] | None:
+    if shutil.which("pngpaste"):
+        data = _run(["pngpaste", "-"])
+        if data:
+            return data, "image/png"
+    tmp = _fresh_tmp()
+    script = (
+        'try\nset f to (open for access POSIX file "%s" with write permission)\n'
+        "write (the clipboard as «class PNGf») to f\nclose access f\nend try" % tmp
+    )
+    _run_text(["osascript", "-e", script])
+    return _read_tmp(tmp, "image/png")
 
 
 def _fresh_tmp() -> str:
@@ -125,7 +138,7 @@ def _grab_windows() -> tuple[bytes, str] | None:
 
 def available() -> bool:
     """Whether a clipboard image tool is present on this OS."""
-    if sys.platform == "darwin" or os.name == "nt":
+    if _system() in ("macos", "windows"):
         return True
     return bool((os.environ.get("WAYLAND_DISPLAY") and shutil.which("wl-paste"))
                 or (os.environ.get("DISPLAY") and shutil.which("xclip")))
