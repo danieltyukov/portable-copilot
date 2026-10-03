@@ -1,0 +1,511 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sparky, open-weight AI on a USB stick</title>
+  <meta name="description" content="Sparky runs open-weight AI models from a USB stick on Windows, macOS and Linux, with nothing to install, no account and no internet once the stick is set up. A setup wizard picks models by what you want them for: everyday questions, code, writing, studying your own documents, images or translation.">
+  <meta name="theme-color" content="#FFC61A" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#1F1909" media="(prefers-color-scheme: dark)">
+  <meta name="color-scheme" content="light dark">
+  <meta property="og:title" content="Sparky, open-weight AI on a USB stick">
+  <meta property="og:description" content="Plug a stick into any Windows, macOS or Linux computer, run one file, and chat with open-weight models in the terminal or the browser. Nothing to install, no account, and nothing leaves the computer.">
+  <meta property="og:image" content="https://danieltyukov.github.io/portable-copilot/assets/logo.png">
+  <meta property="og:url" content="https://danieltyukov.github.io/portable-copilot/">
+  <link rel="canonical" href="https://danieltyukov.github.io/portable-copilot/">
+  <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+  <link rel="icon" href="assets/icon48.png" type="image/png" sizes="48x48">
+  <script>
+    // A theme picked with the header button wins over the system setting. Set
+    // before first paint so the page never flashes the other theme.
+    try {
+      var saved = localStorage.getItem("sparky-theme");
+      if (saved === "light" || saved === "dark") document.documentElement.setAttribute("data-theme", saved);
+    } catch (e) {}
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Mono:ital,wght@0,400..700;1,400..700&family=Atkinson+Hyperlegible+Next:ital,wght@0,400..800;1,400..800&display=swap">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+
+  <header class="top">
+    <div class="wrap top-inner">
+      <a class="brand" href="#main" aria-label="Sparky, home">
+        <img class="mark-light" src="assets/budgie-ink.svg" width="30" height="30" alt="">
+        <img class="mark-dark" src="assets/icon.svg" width="30" height="30" alt="">
+        <span>Sparky</span>
+      </a>
+      <nav aria-label="Site">
+        <a href="#who">Who it is for</a>
+        <a href="#setup">Set up</a>
+        <a href="#models">Models</a>
+        <a href="#use">Use it</a>
+        <a href="https://github.com/danieltyukov/portable-copilot">GitHub</a>
+        <button class="theme" id="theme" type="button" hidden>
+          <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false"><circle cx="10" cy="10" r="7.25" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M10 2.75a7.25 7.25 0 0 1 0 14.5z" fill="currentColor"/></svg>
+          <span class="visually-hidden" id="theme-label">Switch theme</span>
+        </button>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main">
+    <section class="hero" aria-labelledby="headline">
+      <div class="wrap hero-grid">
+        <div class="hero-copy">
+          <h1 id="headline"><span class="nobr">Your own AI,</span> <span class="nobr">on a USB stick.</span></h1>
+          <p class="lede">
+            Sparky runs open-weight models from a USB stick on Windows, macOS and Linux. There is
+            nothing to install and no account, and once the stick is set up it needs no internet.
+            You choose models by what you want them for, and a setup wizard picks ones that fit
+            the stick and the computers you will use it on.
+          </p>
+          <p class="actions">
+            <a class="btn btn-primary" href="https://github.com/danieltyukov/portable-copilot">Get it on GitHub</a>
+            <a class="btn" href="#how">How it works</a>
+          </p>
+          <p class="fine">
+            Free and open source under the MIT licence. Nothing you type leaves the computer.
+          </p>
+        </div>
+
+        <!--
+          The one moving thing on the page: the terminal app, drawn the way it
+          draws itself. The markup is the final frame, which is what reduced
+          motion and no JavaScript show. The script rewinds it and plays it once,
+          when it scrolls into view: a question is typed, the reply streams in,
+          then Ctrl-T moves the toolbar to the next model on the stick. The model
+          tags live in the markup (data-first is the one before Ctrl-T).
+        -->
+        <figure class="demo">
+          <div class="term" id="demo" role="img" aria-label="The Sparky terminal app on Windows, running from the stick at E:\Sparky with the qwen3.5:4b model in chat mode. Asked what open-weight means, it answers in two sentences. Then Ctrl-T moves the toolbar to the next model on the stick, gemma4:12b.">
+            <div class="term-bar" aria-hidden="true"><span></span><span></span><span></span><b>sparky</b></div>
+            <div class="t-banner">
+              <img src="assets/icon.svg" width="48" height="48" alt="">
+              <p>
+                <b class="t-brand">Sparky</b> <span class="dim">0.4.0</span><br>
+                <span class="ok">&#9679;</span> <span class="dim">on this computer</span> qwen3.5:4b <span class="dim">&middot; Chat mode</span><br>
+                <span class="dim">E:\Sparky</span>
+              </p>
+            </div>
+            <p class="dim t-hint">/help &middot; Ctrl-T next model &middot; /mode &middot; Ctrl-C stops a reply</p>
+            <div class="t-log">
+              <p class="t-you"><span class="arrow">&rsaquo;</span> <span id="ask">What does "open-weight" mean? Two sentences.</span></p>
+              <div class="t-out">
+                <p class="t-think dim" id="think"><span id="spin">&#10251;</span> qwen3.5:4b is working</p>
+                <p id="reply">It means the trained model itself, the file of weights, is published for anyone to download and run on their own computer. You can use it offline and nobody sees your prompts, although the training data and code are often not released.</p>
+              </div>
+              <p class="t-stats dim" id="stats">qwen3.5:4b &middot; 52 tokens &middot; 17.4 tokens/s</p>
+              <p class="t-you" id="next"><span class="arrow">&rsaquo;</span> <span class="caret">&#9612;</span></p>
+            </div>
+            <p class="t-bar">
+              <span><b class="t-model" id="model" data-first="qwen3.5:4b">gemma4:12b</b> <span class="dim">&middot;</span> Chat <span class="ok">&#9679;</span> on this computer</span>
+              <span><b class="kc kc-t" id="ctrlt">Ctrl-T</b>model</span>
+              <span><b class="kc">Ctrl-C</b>stop</span>
+            </p>
+          </div>
+          <figcaption>
+            <span>Answered on the computer itself, from the stick. Then <span class="nobr"><kbd>Ctrl</kbd>+<kbd>T</kbd></span> moves to the next model on the stick; the toolbar shows which one answers next.</span>
+            <button class="replay" id="replay" type="button" hidden>Replay</button>
+          </figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section class="section who" id="who" aria-labelledby="who-h">
+      <div class="wrap who-grid">
+        <div class="who-copy">
+          <h2 id="who-h">Who it is for</h2>
+          <p class="intro">
+            Anyone who wants an AI model they can carry, without a graphics card, a subscription
+            or a fast connection, and without learning how local models work first.
+          </p>
+          <p>
+            You answer a few plain questions when you set up the stick. After that it is one file
+            to run on whichever computer is in front of you.
+          </p>
+        </div>
+        <dl class="who-list">
+          <div>
+            <dt>No GPU, no model know-how</dt>
+            <dd>The wizard asks how much memory your computers have and picks models that will run on them. You never have to compare model sizes yourself.</dd>
+          </div>
+          <div>
+            <dt>Travel and offline work</dt>
+            <dd>On a plane or somewhere with no signal it works the same, because nothing is fetched while you use it.</dd>
+          </div>
+          <div>
+            <dt>Private documents</dt>
+            <dd>A medical letter or a contract you would not paste into a website stays on the computer you are using, and the conversation is saved only on the stick.</dd>
+          </div>
+          <div>
+            <dt>Classrooms and labs</dt>
+            <dd>One stick works on every computer in the room, whatever it runs, and nobody needs an account. Copy the stick to give a class the same models.</dd>
+          </div>
+          <div>
+            <dt>Coders on locked-down machines</dt>
+            <dd>Where you cannot install anything, code mode is a local coding agent that reads and edits files in a folder and runs commands after asking you.</dd>
+          </div>
+        </dl>
+        <p class="who-note">
+          Models small enough to carry are less capable than the large cloud services. They are
+          slower on most laptops and make more mistakes, so check anything that matters.
+        </p>
+      </div>
+    </section>
+
+    <section class="section alt" id="setup" aria-labelledby="setup-h">
+      <div class="wrap split">
+        <div>
+          <h2 id="setup-h">Set up a stick</h2>
+          <p class="intro">
+            You need a USB stick and an internet connection once, for the downloads. After that
+            the stick works offline.
+          </p>
+          <ol class="steps">
+            <li>
+              Format a USB stick as <strong>exFAT</strong> and name it <code>Sparky</code>. FAT32
+              cannot hold files over 4&nbsp;GB, and most model files are bigger than that.
+            </li>
+            <li>
+              Download the repository (the green Code button, then Download ZIP, or
+              <code>git clone</code>) and run <code>setup.bat</code> on Windows or
+              <code>./setup.sh</code> on macOS and Linux. Both fetch a portable Python first if the
+              computer has none.
+            </li>
+            <li>
+              The wizard asks <mark>where to install</mark>, <mark>what you want it for</mark>, and
+              <mark>how much memory your computers have</mark> (8, 16 or 32&nbsp;GB). It recommends
+              models that fit, shows their sizes, and downloads them to the stick. By default the
+              stick also gets the runtimes for Windows, macOS (Apple Silicon and Intel) and Linux.
+            </li>
+            <li>
+              On any computer: open the stick and run <code>sparky.cmd</code>. On Windows you can
+              double-click it.
+            </li>
+          </ol>
+        </div>
+        <div>
+          <pre class="code"><code><span class="c"># once, from the downloaded repository</span>
+setup.bat           <span class="c"># Windows</span>
+./setup.sh          <span class="c"># macOS and Linux</span>
+
+<span class="c"># then on any computer, from the stick</span>
+sparky.cmd          <span class="c"># Windows</span>
+./sparky.cmd        <span class="c"># macOS and Linux</span>
+
+<span class="c"># later</span>
+sparky.cmd models add &lt;name&gt;
+sparky.cmd doctor   <span class="c"># check this computer</span></code></pre>
+          <ul class="facts-list">
+            <li>
+              <strong>Use a USB 3 stick.</strong> A model is read from the stick each time it
+              loads, and a 3&nbsp;GB model takes well over a minute over USB 2.
+            </li>
+            <li>
+              <strong>Size.</strong> A small everyday model is about 3&nbsp;GB and the large coding
+              model about 19&nbsp;GB, plus a runtime for each kind of computer. The wizard tells you
+              what fits before it downloads anything.
+            </li>
+            <li>
+              <strong>Run it again to change things.</strong> <code>sparky.cmd setup</code> asks
+              the questions again, and <code>sparky.cmd models remove</code> frees space.
+            </li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="models" aria-labelledby="models-h">
+      <div class="wrap">
+        <h2 id="models-h">Pick by purpose, not by model name</h2>
+        <p class="intro">
+          The wizard and <code>sparky.cmd models recommend</code> sort models by what they are
+          good at. These are the current picks for each purpose; if your computers have less
+          memory, you are offered a smaller model for the same purpose.
+        </p>
+        <!-- Example tags: keep in step with sparky/catalog.py. -->
+        <ul class="purposes">
+          <li>
+            <h3>Everyday</h3>
+            <code class="tag">qwen3.5:4b</code>
+            <p>Questions, explanations, emails and summaries. The one most people start with.</p>
+          </li>
+          <li>
+            <h3>Code</h3>
+            <code class="tag">qwen3-coder:30b</code>
+            <p>A coding agent for a folder of code. It needs about 20&nbsp;GB of memory, so smaller computers get a smaller coder.</p>
+          </li>
+          <li>
+            <h3>Write</h3>
+            <code class="tag">gemma4:12b</code>
+            <p>Drafting and editing longer text, such as a letter or a report.</p>
+          </li>
+          <li>
+            <h3>My documents</h3>
+            <code class="tag">qwen3.5:9b</code>
+            <p>Answers from the files you put in the stick's <code>context</code> folder, and says which file each answer came from.</p>
+          </li>
+          <li>
+            <h3>Images</h3>
+            <code class="tag">qwen3-vl:4b</code>
+            <p>Reads screenshots, photos and scanned pages that you paste or attach.</p>
+          </li>
+          <li>
+            <h3>Translate</h3>
+            <code class="tag">translategemma:4b</code>
+            <p>Translation between many languages, from a model trained for that job.</p>
+          </li>
+          <li>
+            <h3>Reason</h3>
+            <code class="tag">gpt-oss:20b</code>
+            <p>Works through maths and logic step by step before it answers. Slower, needs 16&nbsp;GB of memory, and <code>/think</code> shows its working.</p>
+          </li>
+          <li class="aside">
+            <h3>Old computers</h3>
+            <code class="tag">qwen3.5:0.8b</code>
+            <p>Not a purpose of its own: answer 8&nbsp;GB to the memory question and you are offered smaller models, down to this one. Quick, and it makes more mistakes.</p>
+          </li>
+        </ul>
+        <div class="any">
+          <p>
+            You are not limited to the list. Any model in the Ollama library, or a GGUF file on
+            Hugging Face, can go on the stick, and every model is stored once for all the
+            computers it runs on.
+          </p>
+          <pre class="code"><code>sparky.cmd models add llama3.2:3b
+sparky.cmd models add hf.co/&lt;user&gt;/&lt;repo&gt;
+sparky.cmd models recommend --for code</code></pre>
+        </div>
+      </div>
+    </section>
+
+    <section class="section alt" id="use" aria-labelledby="use-h">
+      <div class="wrap">
+        <h2 id="use-h">Four ways to use it</h2>
+        <p class="intro">
+          Each is one command on the stick. On macOS and Linux, write it as
+          <code>./sparky.cmd</code>.
+        </p>
+        <div class="ways">
+          <article class="way">
+            <h3>Chat in the terminal</h3>
+            <p>The default. Replies stream in as they are written, formatted as Markdown, with the model and mode in the toolbar.</p>
+            <pre class="code"><code>sparky.cmd</code></pre>
+          </article>
+          <article class="way">
+            <h3>Chat in the browser</h3>
+            <p>Opens a chat page in your browser, served from the stick to this computer only. The same models and modes, for anyone who would rather not use a terminal.</p>
+            <pre class="code"><code>sparky.cmd web</code></pre>
+          </article>
+          <article class="way">
+            <h3>One answer</h3>
+            <p>Prints a single answer and exits. Text piped in is added to the question, so it works in scripts.</p>
+            <pre class="code"><code>sparky.cmd ask "Summarise" &lt; notes.txt</code></pre>
+          </article>
+          <article class="way">
+            <h3>A model server for other apps</h3>
+            <p>Starts only the model server and prints an OpenAI-compatible address that an editor plugin or your own script can use.</p>
+            <pre class="code"><code>sparky.cmd serve
+<span class="c"># http://127.0.0.1:11500/v1</span></code></pre>
+          </article>
+        </div>
+
+        <h3 class="keymap-h" id="keys-h">In a chat</h3>
+        <p class="fine">The same keys and commands work in the terminal and the browser.</p>
+        <dl class="keymap">
+          <div><dt><kbd>Ctrl</kbd>+<kbd>T</kbd></dt><dd>The next model on the stick, for the next reply.</dd></div>
+          <div><dt><kbd>Ctrl</kbd>+<kbd>C</kbd></dt><dd>Stop the reply in progress. The conversation stays.</dd></div>
+          <div><dt><code>/model</code></dt><dd>Switch to a model by name. <code>/models</code> lists the ones on the stick.</dd></div>
+          <div><dt><code>/mode</code></dt><dd>Chat, code, write or study. Code mode edits files and runs commands, and asks before each command.</dd></div>
+          <div><dt><code>/pull</code></dt><dd>Download another model, while you are online.</dd></div>
+          <div><dt><code>/think</code></dt><dd>Show or hide the model's reasoning, for models that have it.</dd></div>
+          <div><dt><code>/paste</code></dt><dd>Attach an image from the clipboard for a vision model. <code>/img</code> takes a file path.</dd></div>
+          <div><dt><code>/resume</code></dt><dd>Carry on from the last conversation. <code>/sessions</code> lists the others.</dd></div>
+        </dl>
+      </div>
+    </section>
+
+    <section class="band dark" id="how" aria-labelledby="how-h">
+      <div class="wrap">
+        <h2 id="how-h">How it runs</h2>
+        <div class="runs">
+          <pre class="flow"><b>sparky.cmd</b>
+ <span aria-hidden="true">&#9492;</span> <i>shell script and batch file in one</i>
+ <span class="fa" aria-hidden="true">&#9660;</span>
+<b>portable Python + bundled Ollama</b>
+ <span aria-hidden="true">&#9492;</span> <i>this OS and chip, from runtime/</i>
+ <span class="fa" aria-hidden="true">&#9660;</span>
+<b>model weights in runtime/ollama/models</b>
+ <span aria-hidden="true">&#9492;</span> <i>one copy for every OS on the stick</i>
+ <span class="fa" aria-hidden="true">&#9660;</span>
+<b>terminal chat or browser chat</b>
+ <span aria-hidden="true">&#9492;</span> <i>or ask, or serve; all on 127.0.0.1</i></pre>
+          <dl class="facts">
+            <div><dt>Windows, macOS and Linux.</dt><dd>Windows on x86_64, macOS on Intel and Apple Silicon, Linux on x86_64 and ARM. The stick gets all of them by default, and the launcher works out which one it is on.</dd></div>
+            <div><dt>Nothing is installed.</dt><dd>Python, the model server and the models all run from the stick. Some managed computers block programs on USB drives, and Sparky cannot get around that.</dd></div>
+            <div><dt>Settings stay on the stick.</dt><dd><code>HOME</code>, configuration and caches are pointed at the stick while it runs, so nothing is left in your user folder.</dd></div>
+            <div><dt>Models are shared.</dt><dd>Each model is stored once. A model downloaded on Windows is the same file a Mac or a Linux machine loads; each OS only adds its own runtime.</dd></div>
+            <div><dt>Speed depends on the computer.</dt><dd>The model server uses a supported GPU when it finds one, and the processor otherwise. Small models are the ones that feel quick on an ordinary laptop.</dd></div>
+            <div><dt>Offline after setup.</dt><dd>Once the models and runtimes are on the stick, no connection is needed. The model server listens on 127.0.0.1 only.</dd></div>
+          </dl>
+        </div>
+      </div>
+    </section>
+
+    <section class="band sun" id="privacy" aria-labelledby="privacy-h">
+      <div class="wrap">
+        <h2 id="privacy-h">Where your data goes</h2>
+        <p>
+          Nowhere. The model runs on the computer you plugged into, and the chat page and model
+          server only answer on that computer. There is no account and no telemetry.
+        </p>
+        <p>
+          Sparky downloads in two cases only: during setup, and when you add a model or a
+          runtime, from Ollama or Hugging Face.
+        </p>
+        <p>
+          Conversations are saved on the stick in <code>data/sessions</code>, as files you can
+          read or delete. Anyone holding the stick can read them too, so look after it like any
+          drive with private files on it.
+        </p>
+      </div>
+    </section>
+  </main>
+
+  <footer class="foot">
+    <div class="wrap foot-inner">
+      <p>
+        <img class="mark-light" src="assets/budgie-ink.svg" width="22" height="22" alt="">
+        <img class="mark-dark" src="assets/icon.svg" width="22" height="22" alt="">
+        Sparky, open-weight AI on a USB stick. MIT licence.
+      </p>
+      <nav aria-label="Project">
+        <a href="https://github.com/danieltyukov/portable-copilot">Source</a>
+        <a href="https://github.com/danieltyukov/portable-copilot/releases/latest">Releases</a>
+        <a href="https://github.com/danieltyukov/portable-copilot/blob/main/CHANGELOG.md">Changelog</a>
+        <a href="https://github.com/danieltyukov/portable-copilot/blob/main/CONTRIBUTING.md">Contributing</a>
+        <a href="https://github.com/danieltyukov/portable-copilot/issues">Issues</a>
+      </nav>
+    </div>
+  </footer>
+
+  <script>
+    // The theme button: flips between light and dark and remembers the choice.
+    (function () {
+      var root = document.documentElement;
+      var btn = document.getElementById("theme");
+      var label = document.getElementById("theme-label");
+      var metas = document.querySelectorAll('meta[name="theme-color"]');
+      var system = window.matchMedia("(prefers-color-scheme: dark)");
+      function current() { return root.getAttribute("data-theme") || (system.matches ? "dark" : "light"); }
+      function sync() {
+        var now = current();
+        var picked = root.getAttribute("data-theme");
+        label.textContent = now === "dark" ? "Switch to the light theme" : "Switch to the dark theme";
+        // A picked theme sets both colours; otherwise each follows its media query.
+        metas[0].setAttribute("content", picked === "dark" ? "#1F1909" : "#FFC61A");
+        metas[1].setAttribute("content", picked === "light" ? "#FFC61A" : "#1F1909");
+      }
+      btn.hidden = false;
+      btn.addEventListener("click", function () {
+        var next = current() === "dark" ? "light" : "dark";
+        root.setAttribute("data-theme", next);
+        try { localStorage.setItem("sparky-theme", next); } catch (e) {}
+        sync();
+      });
+      if (system.addEventListener) system.addEventListener("change", sync);
+      sync();
+    })();
+
+    // The hero demo. The markup is the final frame; this rewinds it and plays it
+    // once when it comes into view. Reduced motion keeps the final frame.
+    (function () {
+      var demo = document.getElementById("demo");
+      if (!demo || !window.matchMedia) return;
+      if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+
+      var think = document.getElementById("think");
+      var spin = document.getElementById("spin");
+      var stats = document.getElementById("stats");
+      var next = document.getElementById("next");
+      var model = document.getElementById("model");
+      var ctrlt = document.getElementById("ctrlt");
+      var replay = document.getElementById("replay");
+      var firstModel = model.getAttribute("data-first");
+      var lastModel = model.textContent;
+      var frames = "\u280b\u2819\u2839\u2838\u283c\u2834\u2826\u2827\u2807\u280f";   // Rich's "dots" spinner
+
+      // Split the question into letters and the reply into words once, so one
+      // can be typed and the other streamed the way the app streams it. Hidden
+      // pieces keep their space, so nothing moves while it plays.
+      function pieces(id, sep) {
+        var el = document.getElementById(id);
+        var parts = el.textContent.split(sep);
+        el.textContent = "";
+        return parts.map(function (p, i) {
+          var s = document.createElement("span");
+          s.textContent = (sep && i ? sep : "") + p;
+          el.appendChild(s);
+          return s;
+        });
+      }
+      var letters = pieces("ask", "");
+      var words = pieces("reply", " ");
+
+      var timers = [];
+      var spinner = null;
+      function at(ms, fn) { timers.push(setTimeout(fn, ms)); }
+      function stopSpin() { if (spinner) { clearInterval(spinner); spinner = null; } }
+
+      function rewind() {
+        timers.forEach(clearTimeout);
+        timers = [];
+        stopSpin();
+        letters.concat(words, [stats, next]).forEach(function (s) { s.classList.add("wait"); });
+        think.classList.remove("on");
+        model.textContent = firstModel;
+        model.classList.remove("flash");
+        ctrlt.classList.remove("hit");
+      }
+
+      function play() {
+        rewind();
+        var typed = 500 + letters.length * 38;
+        letters.forEach(function (s, i) { at(500 + i * 38, function () { s.classList.remove("wait"); }); });
+        at(typed + 300, function () {
+          var f = 0;
+          think.classList.add("on");
+          spinner = setInterval(function () { f = (f + 1) % frames.length; spin.textContent = frames[f]; }, 80);
+        });
+        var streamed = typed + 1700;
+        at(streamed, function () { stopSpin(); think.classList.remove("on"); });
+        words.forEach(function (s, i) { at(streamed + 60 + i * 65, function () { s.classList.remove("wait"); }); });
+        var done = streamed + 60 + words.length * 65;
+        at(done + 250, function () { stats.classList.remove("wait"); });
+        at(done + 500, function () { next.classList.remove("wait"); });
+        // Ctrl-T: the key goes down, and the toolbar names the next model.
+        at(done + 1800, function () { ctrlt.classList.add("hit"); });
+        at(done + 2050, function () { model.textContent = lastModel; model.classList.add("flash"); });
+        at(done + 2400, function () { ctrlt.classList.remove("hit"); });
+      }
+
+      replay.addEventListener("click", play);
+      replay.hidden = false;
+
+      rewind();
+      if ("IntersectionObserver" in window) {
+        var seen = new IntersectionObserver(function (entries) {
+          if (entries[0].isIntersecting) { seen.disconnect(); play(); }
+        }, { threshold: 0.35 });
+        seen.observe(demo);
+      } else {
+        play();
+      }
+    })();
+  </script>
+</body>
+</html>
