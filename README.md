@@ -1,179 +1,158 @@
 <p align="center">
-  <img src="docs/sparky-logo.svg" width="760" alt="Sparky — portable copilot">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/logo-dark.png">
+    <img src="docs/logo.png" width="820" alt="Sparky. Your own AI, on a USB stick. Open-weight models, any computer, no internet.">
+  </picture>
 </p>
 
 <p align="center">
-  <b>Sparky</b> is a <b>fully-local</b>, Claude-Code-style AI coding copilot that runs from a
-  USB stick on <b>any computer</b> — Linux, macOS, or Windows — with <b>no install, no login,
-  and no internet</b>. Plug it in, run one command, and you have a real agentic copilot that
-  reads and edits files, runs commands, and searches code — entirely offline.
+  <b>Sparky</b> puts open-weight AI models on a USB stick. Plug it into any Windows,
+  macOS or Linux computer, run one file, and you can chat, write, code, ask about
+  your own documents or read images, with <b>nothing installed</b>, no account and
+  no internet. The model runs on the computer in front of you.
 </p>
 
 <p align="center">
-  🔒 <b>100% local Qwen.</b>  ⚡ <b>Switch tiers for speed vs. accuracy</b> — the local
-  analogue of Haiku ↔ Opus — with <b>Ctrl-T</b>, mid-session. Nothing ever leaves the machine.
+  You do not need to know anything about models. Setup asks what the stick is for
+  and which computers it will meet, then picks models that fit both.
+</p>
+
+<p align="center">
+  Website: <a href="https://danieltyukov.github.io/portable-copilot/">danieltyukov.github.io/portable-copilot</a>
+</p>
+
+<p align="center">
+  <img src="docs/screenshot.png" width="820" alt="Sparky in a terminal: the yellow budgie banner, a question about open-weight models answered at 17 tokens per second, and the two models on the stick">
 </p>
 
 ---
 
-## One command, every device
-
-Sparky ships a single self-detecting launcher — the same file runs on all three
-operating systems:
-
-```bash
-# macOS / Linux
-./sparky.cmd
-
-# Windows (or just double-click it)
-sparky.cmd
-```
-
-`sparky.cmd` is a polyglot: a POSIX shell script *and* a Windows batch file at once.
-It detects the OS, picks the right bundled runtime, starts the local model in the
-background, and launches the copilot. Nothing is installed on the host machine.
-
-## What it does
-
-- 🧠 **Local Qwen, two tiers** — switch between **`fast`** (snappy, runs on any laptop)
-  and **`max`** (a 30B MoE — the best CPU agentic coder that fits a stick) with **Ctrl-T**
-  or `/model`. Aliases `haiku`/`sonnet`/`opus` work too. The header shows the active tier.
-- 🛟 **Graceful tier fallback** — if a host doesn't have the RAM for `max`, the turn
-  auto-downgrades to `fast` instead of erroring, tagged `⚠ downgraded`.
-- 🛠 **Real coding agent** — tools for read / write / edit files, list dirs, search, and
-  run shell commands (with an approval prompt unless you `/yolo`).
-- ✨ **Live, Claude-Code-style TUI** — responses **stream** as they're generated (you see it
-  think and watch each tool run as a card), markdown-formatted output, a clear `›` input with
-  a bottom toolbar showing the active tier.
-- 🖼 **Text *and* image prompts** — attach a screenshot with `/img shot.png what's this?` or
-  paste from the clipboard with `/paste` (images pass to the local model; to *understand*
-  them, use a vision tag like `qwen3-vl` — see swapping below).
-- 📂 **Per-drive context folder** — drop notes, specs, or code into `context/` on the
-  stick and Sparky loads them into every session automatically.
-- 🔌 **Swap models per stick size** — one command re-tiers the stick for an 8 GB or a
-  64 GB drive (see below).
-- 🔒 **Zero footprint, zero network** — `HOME`, config, caches, and the models all live on
-  the stick; your host machine stays untouched and nothing is ever sent anywhere.
-
-### Tiers
-
-| Tier | Model (default) | Download | RAM to run | Feel |
-|---|---|---|---|---|
-| `fast` | `qwen3.5:4b` | ~3.4 GB | ~5 GB | quick; runs on any laptop |
-| **`max`** (default) | `qwen3-coder:30b` | ~19 GB | ~20 GB | a3b MoE — best CPU agentic coder (~10 tok/s) |
-
-> Why not GLM-5.2 / DeepSeek V4 / Kimi K2.6? Those top the open-weights leaderboard but are
-> 240 GB–900 GB and need server-class RAM — impossible on a USB stick + a laptop CPU. The
-> practical ceiling for "any laptop + a ~30 GB stick" is ~30B params, and the `max` tier is
-> the strongest model that fits there.
-
 ## Set up a stick
 
-Plug in a USB drive and name its volume **`Sparky`**. **Format it as exFAT**: exFAT is
-cross-platform, supports files >4GB, and — unlike FAT32 — mounts executable on Linux, which
-the local model needs. If your stick is FAT32, run `sudo tools/format_exfat.sh` once to
-convert it (it backs up, reformats, and restores). Then:
+**You need:** a USB stick formatted as **exFAT** (32 GB or more is comfortable), and
+the internet for the setup itself. Download this repository (Code, Download ZIP) or
+clone it, then run setup:
 
 ```bash
-# macOS / Linux — wipes the stick, installs Sparky, fetches the runtime + models
-tools/setup_usb.sh                       # default: large preset (~32 GB stick)
-tools/setup_usb.sh --preset medium       # size the models to a 16 GB stick
-tools/setup_usb.sh --cross               # also bundle macOS+Windows runtimes
-```
-```powershell
-# Windows
-powershell -ExecutionPolicy Bypass -File tools\setup_usb.ps1 -Preset large
+git clone https://github.com/danieltyukov/portable-copilot.git && cd portable-copilot
+./setup.sh             # macOS and Linux
+setup.bat              # Windows (or double-click it)
 ```
 
-Setup downloads a relocatable Python, the pure-Python deps, the Ollama binary, and pulls
-the Qwen weights **onto the stick** — so a brand-new *offline* machine works on first
-plug-in (after the one-time per-OS setup while you have internet). The first time you launch
-on a new OS, Sparky auto-fetches that OS's runtime if it's missing (needs internet once);
-afterwards it's cached on the stick and works fully offline.
+The computer needs no Python or anything else: setup fetches a portable Python
+first. It then asks three questions (which drive, what it is for, how much memory
+the computers you will use have), shows the models it recommends with their sizes,
+and copies everything onto the stick: the app, a runtime for Windows, macOS (Apple
+Silicon and Intel) and Linux, and the models. Everything comes from the projects'
+official releases and is checked before it is used.
 
-## Swapping models (bigger / smaller sticks)
+> **Why exFAT?** FAT32 cannot hold files over 4 GB, and most models are bigger. On
+> Windows, format the stick from File Explorer; on a Mac, use Disk Utility; on Linux,
+> the Disks app, or `sudo tools/format_exfat.sh` to convert a FAT32 stick and keep
+> what is on it. Name it `Sparky` and setup finds it.
 
-Re-tier any stick in one command — pull a different model set and rewrite the stick's
-`data/sparky.env` so the app picks it up next launch:
+Running setup again on a stick updates it and keeps your settings, conversations
+and models. `./setup.sh --help` lists the options for scripting it.
+
+## Use it
+
+On any computer, open the stick and run:
 
 ```bash
-tools/set_models.sh --preset small       # ~8 GB  : fast qwen3.5:0.8b · max qwen3.5:4b
-tools/set_models.sh --preset medium      # ~16 GB : fast qwen3.5:4b   · max qwen3.5:9b
-tools/set_models.sh --preset large       # ~32 GB : fast qwen3.5:4b   · max qwen3-coder:30b
-tools/set_models.sh --preset xl          # ~64 GB+: fast qwen3.5:9b   · max qwen3.6:35b-a3b
-
-tools/set_models.sh --max qwen3.6:27b    # pick any Ollama tag for either tier
-tools/set_models.sh --preset small --rm-old   # also delete the old weights to reclaim space
-tools/set_models.sh --list               # show what's on the stick
-```
-```powershell
-powershell -ExecutionPolicy Bypass -File tools\set_models.ps1 -Preset xl
+./sparky.cmd           # macOS and Linux (on a Mac you can also double-click start.command)
+sparky.cmd             # Windows (or double-click it)
 ```
 
-Or just hand-edit `data/sparky.env` on the stick:
-
-```
-SPARKY_FAST_MODEL=qwen3.5:4b
-SPARKY_MAX_MODEL=qwen3-coder:30b
-SPARKY_TIER=max          # which tier to open on
-```
-
-## In-session commands
-
-| Command | Action |
+| Command | What it does |
 |---|---|
-| `/help` | list commands |
-| `/model [fast\|max\|<tag>]` | switch tier (aliases `haiku`/`sonnet`/`opus`) — or **Ctrl-T** |
-| `/img <path> [message]` | attach an image file to the next message |
-| `/paste` · **Ctrl-V** | paste an image from the clipboard |
-| `/resume` · `/sessions` | resume your last conversation · list saved ones |
-| `/context` | show what's loaded from `context/` |
-| `/yolo` | toggle auto-approval of shell commands |
-| `/clear` · `/quit` | clear history · exit |
+| `sparky.cmd` | Chat in the terminal |
+| `sparky.cmd web` | Chat in the browser, on a page only this computer can open |
+| `sparky.cmd ask "..."` | One answer, printed. Text piped in is added: `cat notes.txt \| sparky.cmd ask "summarise this"` |
+| `sparky.cmd serve` | Just the model server, as an OpenAI-compatible API at `http://127.0.0.1:11500/v1` for other apps |
+| `sparky.cmd models` | The models on the stick; `models add <name>`, `models remove <name>`, `models recommend` |
+| `sparky.cmd doctor` | Check this computer, the runtime and the models |
 
-Conversations auto-save to `data/sessions/` after every turn; `./sparky.cmd --resume`
-re-opens the most recent one on launch.
+In a conversation:
 
-Run `python -m sparky --self-test` (or `sparky.cmd --self-test`) to check the runtime,
-Ollama, and that both tier models are pulled.
+| Key or command | Action |
+|---|---|
+| `Ctrl-T` | Switch to the next model on the stick |
+| `Ctrl-C` | Stop the reply |
+| `/mode` | **chat** (no tools), **code** (reads, edits and runs code in the folder you started in), **write**, or **study** (answers from your `context/` folder) |
+| `/model`, `/pull <name>` | Pick a model; download one while online |
+| `/think` | Show or hide the reasoning of models that think first |
+| `/img <path>`, `/paste` | Attach an image, from a file or the clipboard |
+| `/resume`, `/context`, `/help` | Continue the last conversation; see the context folder; everything else |
 
-## On-stick layout
+In code mode Sparky asks before it runs any command, and before it writes outside
+the folder you started it in:
 
-```
-Sparky/
-├── sparky.cmd          ← the one launcher (Linux/macOS/Windows)
-├── start.sh START.bat start.command   per-OS entry points it dispatches to
-├── sparky/             the Python app (tier router, local provider, agent, tools, TUI)
-├── context/            ← drop files here; auto-loaded every session
-├── runtime/            bundled portable Python + Ollama + Qwen weights (gitignored)
-├── data/               sparky.env (tier settings), sessions, redirected HOME (gitignored)
-└── tools/              setup_usb · set_models · fetch_runtime · format_exfat
-```
+<p align="center">
+  <img src="docs/screenshot-code.png" width="820" alt="Code mode: Sparky reads rename.py, edits it, asks before running a command, and reports the result">
+</p>
+
+Put notes, documents or code in the stick's `context/` folder and every conversation
+knows about them, as much as fits the model's context window; study mode can search
+and open the rest.
+
+## Choosing models
+
+Setup and `sparky.cmd models recommend` choose by purpose and memory. These are its
+first picks, from a curated catalog of models that run well on a laptop without a
+graphics card:
+
+| What for | 8 GB of memory | 16 GB | 32 GB |
+|---|---|---|---|
+| Everyday questions | `qwen3.5:4b` | `gemma4:12b` | `qwen3.6:35b` |
+| Coding | `qwen3.5:4b` | `qwen3.5:9b` | `qwen3-coder:30b` |
+| Writing | `gemma3:4b` | `gemma4:12b` | `gemma4:26b` |
+| My documents | `qwen3.5:4b` | `qwen3.5:9b` | `qwen3.6:35b` |
+| Images | `qwen3-vl:4b` | `qwen3-vl:8b` | `qwen3.6:35b` |
+| Translation | `translategemma:4b` | `translategemma:12b` | `gemma4:26b` |
+| Reasoning | `nemotron-3-nano:4b` | `deepseek-r1:8b` | `gpt-oss:20b` |
+
+The large picks are mixture-of-experts models: 20 to 35 billion parameters in total
+but only 3 to 4 billion used per word, so they answer quickly on a CPU. When a stick
+gets a large model it also gets a small one, so `Ctrl-T` always has a quick option,
+and if a computer lacks the memory for the model you picked, the reply comes from the
+next smaller one instead of failing.
+
+You are not limited to the catalog. `sparky.cmd models add` takes any tag from the
+[Ollama library](https://ollama.com/library) or a GGUF model on Hugging Face
+(`hf.co/<user>/<repo>`), and `sparky.cmd models catalog` lists every model Sparky
+knows with its size, speed and licence.
 
 ## How it works
 
 ```
-        you type / drop an image
-                 │
-                 ▼
-      agent loop (tool use: read·write·edit·search·run)
-                 │
-                 ▼
-        ┌──── tier router ────┐
-        │  fast        max    │   ← Ctrl-T / /model
-        ▼                     ▼
-   qwen3.5:4b          qwen3-coder:30b
-   (snappy)            (best; a3b MoE)
-        │                     │
-        └──────── reply ──────┘   max→fast auto-downgrade if RAM is short
-                 │
-                 ▼   served by a bundled Ollama, 100% offline
+  sparky.cmd                  one file that is both a shell script and a batch file
+       │
+       ▼
+  start.sh / START.bat        HOME, caches and settings redirected to the stick
+       │                      portable Python for this OS (fetched once if missing)
+       ▼
+  bundled Ollama              its own port (11500), weights in runtime/ollama/models,
+       │                      shared by every OS on the stick
+       ▼
+  Sparky                      terminal, browser, ask or serve
+       │   mode: chat · code · write · study
+       │   context/ folder, sized to the model's context window
+       ▼
+  the model you picked ───────▶ a smaller one if this computer lacks the memory
 ```
 
-The router holds the active tier, points the bundled Ollama at that tier's model, and serves
-the call locally. If `max` can't be loaded on a host, the turn finishes on `fast` so you're
-never stuck.
+Nothing is installed on the host computer and nothing is sent anywhere. Downloads
+happen only during setup and when you add a model. More detail, including how the
+browser page is locked to this computer and how setup avoids downloading gigabytes of
+GPU libraries, is in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
-Built on the principles of
-[OpenClaude-Portable](https://github.com/techjarves/OpenClaude-Portable); themed after
-the author's `interview-copilot` (Sparky 🐤). Tests: `python -m pytest` (40 passing).
+> Models small enough to carry make more mistakes than large cloud models, and are
+> slower on most laptops. Check anything that matters.
+
+## Contributing and licence
+
+Patches, bug reports and model suggestions are welcome; see
+[`CONTRIBUTING.md`](CONTRIBUTING.md) for the layout, the tests and the end-to-end
+check. What Sparky stores and sends is in [`PRIVACY.md`](PRIVACY.md), and how to
+report a vulnerability in [`SECURITY.md`](SECURITY.md). Changes are listed in
+[`CHANGELOG.md`](CHANGELOG.md). MIT licence.
