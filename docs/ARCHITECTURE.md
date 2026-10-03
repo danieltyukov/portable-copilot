@@ -17,6 +17,7 @@ installed on the host and nothing it writes leaves the stick.
         |
         |   HOME, XDG_*, APPDATA, USERPROFILE -> data/ on the stick
         |   OLLAMA_MODELS -> runtime/ollama/models, OLLAMA_HOST -> 127.0.0.1:11500
+        |   OLLAMA_NO_CLOUD=1: no calls to ollama.com except the downloads you ask for
         v
   runtime/python/<os-arch>    missing? tools/fetch_python.{sh,ps1} fetches it
         |                     (checksummed), then `python -m sparky runtime`

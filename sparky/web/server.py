@@ -30,8 +30,10 @@ from http.cookies import SimpleCookie
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from .. import __version__, catalog, engine, modes
+from .. import __version__, catalog, engine, hardware, modes
 from .. import sessions as sessions_mod
+from ..context import list_files
+from ..ollama import OllamaError, PullProgress
 from ..providers.base import Cancelled, ModelNotFound, ProviderError
 
 STATIC = Path(__file__).resolve().parent / "static"
@@ -139,6 +141,98 @@ class WebApp:
 
         threading.Thread(target=work, daemon=True).start()
         return events
+
+    # ---- slash commands the page does not handle itself ------------------------
+    def start_command(self, text: str) -> queue.Queue | None:
+        """Run a typed command (/pull, /context, ...) like a turn: notices on
+        the queue, then done. The model never sees the command."""
+        if not self.busy.acquire(blocking=False):
+            return None
+        events: queue.Queue = queue.Queue()
+
+        def work():
+            try:
+                self._command(text, lambda msg: events.put({"type": "notice", "text": msg}))
+                events.put({"type": "done", "text": ""})
+            except Exception as e:   # the page must always hear how it ended
+                events.put({"type": "error", "message": f"error: {e}"})
+            finally:
+                self.busy.release()
+                events.put(DONE)
+
+        threading.Thread(target=work, daemon=True).start()
+        return events
+
+    def _command(self, text: str, say) -> None:
+        cmd, _, rest = text.strip().partition(" ")
+        cmd, rest = cmd.lower(), rest.strip()
+        if cmd == "/pull":
+            self._pull(rest, say)
+        elif cmd == "/context":
+            files = list_files(self.cfg.context_dir)
+            if not files:
+                say(f"The context folder is empty. Put files in {self.cfg.context_dir} and every "
+                    "conversation will know about them.")
+            else:
+                names = ", ".join(str(f.relative_to(self.cfg.context_dir)) for f in files[:30])
+                more = f" and {len(files) - 30} more" if len(files) > 30 else ""
+                say(f"{len(files)} file(s) in {self.cfg.context_dir}: {names}{more}.")
+        elif cmd == "/sessions":
+            items = sessions_mod.list_sessions(self.cfg)[:10]
+            say("Saved conversations: " + "; ".join(d.get("title", "(untitled)") for d in items)
+                if items else "No saved conversations yet.")
+        elif cmd == "/resume":
+            d = sessions_mod.latest(self.cfg)
+            if not d:
+                say("There is no saved conversation to resume.")
+            else:
+                self.agent.history = d.get("history", [])
+                self.session_id = d.get("id", self.session_id)
+                say(f"Resumed: {d.get('title', '(untitled)')}.")
+        elif cmd == "/yolo":
+            self.cfg.yolo = not self.cfg.yolo
+            say("Shell commands now run without asking." if self.cfg.yolo
+                else "Shell commands will ask first again.")
+        else:
+            say(f"Sparky does not know {cmd}. Type /help for the commands.")
+
+    def _pull(self, name: str, say) -> None:
+        if not name:
+            say("Usage: /pull <name>, for example /pull qwen3.5:4b, /pull code, or /pull hf.co/<user>/<repo>.")
+            return
+        manager = self.agent.router.manager
+        if name in catalog.PURPOSES:
+            picks = catalog.recommend(name, hardware.total_ram_gb(), hardware.free_gb(self.cfg.root))
+            if not picks:
+                say(f"Nothing in the catalog for {name} fits this computer and stick.")
+                return
+            name = picks[0].tag
+        say(f"Downloading {name}. This needs the internet and can take a while.")
+        progress = PullProgress()
+        last = {"quarter": -1}
+
+        def show(ev):
+            # one note per quarter of the download, not one per chunk
+            line = progress.update(ev)
+            if line.startswith("downloading"):
+                quarter = int(line.split()[1].rstrip("%")) // 25
+                if quarter != last["quarter"]:
+                    last["quarter"] = quarter
+                    say(line)
+
+        try:
+            manager.client.pull(name, show)
+        except OllamaError as e:
+            msg = str(e)
+            if "newer version" in msg:
+                msg = "it needs a newer model server than this stick has; run setup again to update it"
+            elif "file does not exist" in msg or "not found" in msg:
+                msg = "there is no model by that name; check it at https://ollama.com/library"
+            say(f"Could not add {name}: {msg}.")
+            return
+        manager.installed(refresh=True)
+        self.agent.router.set_model(name)
+        say(f"{name} is ready and selected.")
 
     def _ask(self, events: queue.Queue, command: str) -> bool:
         cid = secrets.token_hex(6)
@@ -320,9 +414,12 @@ def make_handler(app: WebApp, port_ref: dict):
                         "data": str(img["data"])}})
             if not text and not images:
                 return self._json(400, {"error": "empty message"})
-            if not app.agent.router.model:
+            if text.startswith("/") and not images:
+                events = app.start_command(text)
+            elif not app.agent.router.model:
                 return self._json(400, {"error": engine.no_models_message(app.cfg)})
-            events = app.start_turn(text or "What is in this image?", images)
+            else:
+                events = app.start_turn(text or "What is in this image?", images)
             if events is None:
                 return self._json(409, {"error": "busy"})
             self.send_response(200)

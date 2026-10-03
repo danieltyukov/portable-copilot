@@ -95,6 +95,9 @@ class Agent:
                 emit("assistant_done", text=reply.text)
                 if reply.stats:
                     emit("stats", model=backend, **reply.stats)
+                if reply.thinking and not reply.text.strip() and not reply.wants_tools:
+                    emit("notice", text="The model spent the whole reply thinking and gave no answer. "
+                                        "Ask again, or turn thinking off (/think).")
                 if not reply.wants_tools:
                     final_text = reply.text
                     break

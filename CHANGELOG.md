@@ -66,6 +66,13 @@ to upgrade the runtime.
   `/model max` pick the smallest and largest model on the stick.
 
 ### Fixed
+- The bundled Ollama no longer contacts ollama.com on its own: it is started
+  with `OLLAMA_NO_CLOUD=1`, which stops its "model recommendations" fetch at
+  start-up and every few hours. Downloading models is unaffected.
+- With thinking on, a model gets three times the reply budget, and a reply
+  that was all reasoning and no answer says so.
+- In the browser, `/pull`, `/context`, `/sessions`, `/resume` and `/yolo` are
+  handled by Sparky instead of being sent to the model.
 - `python -m sparky` failed when the launcher was started from any folder but
   the stick's own.
 - The Python libraries are installed in isolation, so a package the setup

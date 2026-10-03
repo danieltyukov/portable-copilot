@@ -17,6 +17,10 @@ stick.
 
 There is no analytics, no telemetry, no crash reporting and no update check.
 Sparky asks the model server to go online only to download a model you chose.
+Left to itself, the bundled Ollama would also ask ollama.com for "model
+recommendations" when it starts and every few hours, so Sparky starts it with
+`OLLAMA_NO_CLOUD=1`, which turns that off along with Ollama's cloud-hosted
+models. Downloading models works as before.
 The browser page is served from the stick and loads nothing from the internet;
 a link in an answer opens only if you click it, in a new tab, and the page
 sends no referrer with it.

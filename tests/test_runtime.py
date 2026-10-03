@@ -145,3 +145,4 @@ def test_server_env_keeps_state_on_the_stick(tmp_path):
     assert env["OLLAMA_MODELS"] == str(tmp_path / "runtime" / "ollama" / "models")
     assert env["OLLAMA_HOST"] == "127.0.0.1:11555"
     assert env["HOME"] == str(tmp_path / "data" / "home")
+    assert env["OLLAMA_NO_CLOUD"] == "1"     # no "model recommendations" calls to ollama.com

@@ -200,3 +200,28 @@ def test_simple_history_hides_tool_traffic():
          {"role": "assistant", "content": [text_block("a")]}]
     assert simple_history(h) == [{"role": "user", "text": "q", "images": 0},
                                  {"role": "assistant", "text": "a", "images": 0}]
+
+
+def test_commands_are_handled_by_the_server_not_the_model(web, tmp_path):
+    app, router, base = web
+    (app.cfg.context_dir).mkdir(parents=True, exist_ok=True)
+    (app.cfg.context_dir / "notes.md").write_text("x")
+    evs = events_of(call(base, "/api/chat", {"text": "/context"}, app.token)[1])
+    assert evs[0]["type"] == "notice" and "notes.md" in evs[0]["text"] and evs[-1]["type"] == "done"
+    evs = events_of(call(base, "/api/chat", {"text": "/yolo"}, app.token)[1])
+    assert "without asking" in evs[0]["text"] and app.cfg.yolo is True
+    evs = events_of(call(base, "/api/chat", {"text": "/frobnicate"}, app.token)[1])
+    assert "does not know /frobnicate" in evs[0]["text"]
+    assert router.replies == [] and app.agent.history == []      # the model was never asked
+
+
+def test_pull_from_the_page(web, fake_ollama):
+    app, router, base = web
+    fake_ollama.pull_events = [{"status": "pulling manifest"},
+                               {"status": "pulling a", "digest": "a", "total": 100, "completed": 100},
+                               {"status": "success"}]
+    fake_ollama.models.append({"name": "phi4-mini:3.8b", "size": 2_500_000_000, "details": {}})
+    evs = events_of(call(base, "/api/chat", {"text": "/pull phi4-mini:3.8b"}, app.token)[1])
+    texts = [e.get("text", "") for e in evs if e["type"] == "notice"]
+    assert any("100%" in t for t in texts) and "ready and selected" in texts[-1]
+    assert router.model == "phi4-mini:3.8b"

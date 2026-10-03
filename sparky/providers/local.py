@@ -54,11 +54,13 @@ class LocalProvider:
             ollama_messages.append({"role": "system", "content": system})
         for msg in messages:
             ollama_messages.extend(self._translate_message(msg))
+        # thinking spends tokens before the answer starts, so it gets more room
+        predict = MAX_PREDICT * 3 if think else MAX_PREDICT
         payload: dict = {
             "model": self.model,
             "messages": ollama_messages,
             "stream": False,
-            "options": {"num_predict": MAX_PREDICT, "num_ctx": self.ctx},
+            "options": {"num_predict": min(predict, self.ctx // 2), "num_ctx": self.ctx},
         }
         if tools:
             payload["tools"] = [self._tool_to_ollama(t) for t in tools]
@@ -241,8 +243,8 @@ def stats_from(body: dict) -> dict:
     """Token counts and speed from the server's final chunk (durations in ns)."""
     tokens = int(body.get("eval_count") or 0)
     secs = (body.get("eval_duration") or 0) / 1e9
-    if not tokens:
-        return {}
+    if tokens < 2 or secs < 0.01:
+        return {}   # a one-token reply has no meaningful speed
     return {
         "tokens": tokens,
         "prompt_tokens": int(body.get("prompt_eval_count") or 0),

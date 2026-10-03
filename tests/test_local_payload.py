@@ -127,3 +127,12 @@ def test_parse_uses_text_fallback():
     body = {"message": {"role": "assistant", "content": '{"name": "read_file", "arguments": {"path": "x.py"}}'}}
     reply = LocalProvider._parse(body, ["read_file"])
     assert reply.wants_tools and reply.tool_calls[0].name == "read_file"
+
+
+def test_thinking_gets_a_bigger_reply_budget_and_tiny_replies_no_speed(tmp_path):
+    from sparky.providers.local import MAX_PREDICT, stats_from
+    p = _provider(tmp_path)
+    plain = p.build_payload([], None, None, think=False)["options"]["num_predict"]
+    thinking = p.build_payload([], None, None, think=True)["options"]["num_predict"]
+    assert plain == MAX_PREDICT and thinking > plain
+    assert stats_from({"eval_count": 1, "eval_duration": 1000}) == {}

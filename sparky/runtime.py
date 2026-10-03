@@ -564,6 +564,9 @@ def server_env(root: Path, host: str) -> dict:
         "HOME": str(home),
         "USERPROFILE": str(home),
     })
+    # otherwise Ollama asks ollama.com for "model recommendations" on start
+    # and every few hours; pulls still work with it set
+    env.setdefault("OLLAMA_NO_CLOUD", "1")
     if exe is not None and hardware.os_name() == "linux":
         lib = exe.parent.parent / "lib" / "ollama"
         # no trailing ":" when the variable was empty: an empty entry means

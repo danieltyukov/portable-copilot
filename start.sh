@@ -25,6 +25,9 @@ export XDG_DATA_HOME="$ROOT/data/share"
 export XDG_CACHE_HOME="$ROOT/data/cache"
 export OLLAMA_MODELS="$RT/ollama/models"
 export OLLAMA_HOST="${OLLAMA_HOST:-127.0.0.1:11500}"
+# Without this, Ollama fetches "model recommendations" from ollama.com when it
+# starts and every few hours after. Downloading models is not affected.
+export OLLAMA_NO_CLOUD="${OLLAMA_NO_CLOUD:-1}"
 mkdir -p "$HOME" "$XDG_CONFIG_HOME" "$XDG_DATA_HOME" "$XDG_CACHE_HOME" \
          "$ROOT/data/sessions" "$ROOT/context" "$OLLAMA_MODELS" 2>/dev/null || true
 

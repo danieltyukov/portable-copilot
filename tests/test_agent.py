@@ -137,3 +137,12 @@ def test_fit_history_shortens_old_tool_output():
     out = fit_history(h, 4000)
     assert len(out) == 4
     assert len(out[1]["content"][0]["content"]) < 2000
+
+
+def test_a_reply_that_only_thought_gets_a_notice(tmp_path):
+    reply = _text("")
+    reply.thinking = "hmm " * 500
+    agent = _agent(tmp_path, [reply], mode="chat")
+    events = []
+    agent.run_turn("17 times 3?", on_event=lambda k, d: events.append((k, d)))
+    assert any(k == "notice" and "thinking" in d["text"] for k, d in events)

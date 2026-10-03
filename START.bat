@@ -28,6 +28,9 @@ set "APPDATA=%ROOT%\data\appdata"
 set "LOCALAPPDATA=%ROOT%\data\localappdata"
 set "OLLAMA_MODELS=%RT%\ollama\models"
 if not defined OLLAMA_HOST set "OLLAMA_HOST=127.0.0.1:11500"
+REM Without this, Ollama fetches "model recommendations" from ollama.com when it
+REM starts and every few hours after. Downloading models is not affected.
+if not defined OLLAMA_NO_CLOUD set "OLLAMA_NO_CLOUD=1"
 for %%D in ("%HOME%" "%APPDATA%" "%LOCALAPPDATA%" "%ROOT%\data\sessions" "%ROOT%\context" "%OLLAMA_MODELS%") do (
   if not exist "%%~D" mkdir "%%~D" >nul 2>&1
 )
